@@ -10,6 +10,10 @@ describe bridge('br0') do
   it { should have_interface 'eth1' }
 end
 
+describe cgroup('group1') do
+  its('cpu.shares') { should eq '256' }
+end
+
 describe command('uname -a') do
   its(:exit_status) { should eq 0 }
 end
@@ -69,6 +73,15 @@ describe kernel_module('br_netfilter') do
   it { should be_loaded }
 end
 
+describe linux_audit_system do
+  it { should be_enabled }
+  it { should be_running }
+end
+
+describe linux_kernel_parameter('net.ipv4.ip_forward') do
+  its(:value) { should eq '1' }
+end
+
 describe mount('/data') do
   its(:device) { should eq '/dev/sda1' }
   its(:fstype) { should eq 'ext4' }
@@ -90,6 +103,15 @@ end
 
 describe routing_table do
   it { should have_entry :destination => '192.168.100.0/24', :gateway => '192.168.100.1' }
+end
+
+describe selinux do
+  it { should be_enforcing }
+end
+
+describe selinux_module('virt') do
+  it { should be_enabled }
+  it { should be_installed }
 end
 
 describe service('nginx') do

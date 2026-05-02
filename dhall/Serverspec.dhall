@@ -73,6 +73,16 @@ let IptablesState  = < HasRule : Text >
 let RoutingTableState =
       < HasEntry : { destination : Text, gateway : Text } >
 
+-- PR-2 Linux system / kernel resources --------------------------------------
+
+let SelinuxState = < Enforcing | Permissive | Disabled >
+let SelinuxModuleState = < Enabled | Installed >
+let LinuxAuditSystemState = < Running | Enabled >
+let LinuxKernelParameterState = < HasValue : Text >
+let CgroupState =
+      < HasParameter : { name : Text, value : Text } >
+
+
 
 -- Attribute encoders --------------------------------------------------------
 
@@ -229,6 +239,52 @@ let routingTableStateAttrs =
           }
           s
 
+let selinuxStateAttrs =
+      \(s : SelinuxState) ->
+        merge
+          { Enforcing  = toMap { enforcing  = AttrValue.AVBool True }
+          , Permissive = toMap { permissive = AttrValue.AVBool True }
+          , Disabled   = toMap { disabled   = AttrValue.AVBool True }
+          }
+          s
+
+let selinuxModuleStateAttrs =
+      \(s : SelinuxModuleState) ->
+        merge
+          { Enabled   = toMap { enabled   = AttrValue.AVBool True }
+          , Installed = toMap { installed = AttrValue.AVBool True }
+          }
+          s
+
+let linuxAuditSystemStateAttrs =
+      \(s : LinuxAuditSystemState) ->
+        merge
+          { Running = toMap { running = AttrValue.AVBool True }
+          , Enabled = toMap { enabled = AttrValue.AVBool True }
+          }
+          s
+
+let linuxKernelParameterStateAttrs =
+      \(s : LinuxKernelParameterState) ->
+        merge
+          { HasValue = \(v : Text) -> toMap { value = AttrValue.AVText v } }
+          s
+
+-- cgroup is a wildcard kind: HasParameter projects to a single attribute pair
+-- whose mapKey is the parameter name (e.g. "cpu.shares"). toMap cannot be
+-- used because the field name is value-dependent.
+let cgroupStateAttrs =
+      \(s : CgroupState) ->
+        merge
+          { HasParameter =
+              \(p : { name : Text, value : Text }) ->
+                [ { mapKey = p.name
+                  , mapValue = AttrValue.AVText p.value
+                  }
+                ]
+          }
+          s
+
 -- Smart constructors --------------------------------------------------------
 
 let service
@@ -360,6 +416,49 @@ let routingTable
         , attrs = routingTableStateAttrs s
         }
 
+-- selinux is a singleton; the three states are mutually exclusive in practice
+-- but the validator does not enforce mutual exclusion (a misuse manifests as
+-- a Ruby-level test failure).
+let selinux
+    : SelinuxState -> Assertion
+    = \(s : SelinuxState) ->
+        { kind = "selinux"
+        , primaryKey = "selinux"
+        , attrs = selinuxStateAttrs s
+        }
+
+let selinuxModule
+    : Text -> SelinuxModuleState -> Assertion
+    = \(name : Text) ->
+      \(s : SelinuxModuleState) ->
+        { kind = "selinux_module"
+        , primaryKey = name
+        , attrs = selinuxModuleStateAttrs s
+        }
+
+let linuxAuditSystem
+    : LinuxAuditSystemState -> Assertion
+    = \(s : LinuxAuditSystemState) ->
+        { kind = "linux_audit_system"
+        , primaryKey = "linux_audit_system"
+        , attrs = linuxAuditSystemStateAttrs s
+        }
+
+let linuxKernelParameter
+    : Text -> LinuxKernelParameterState -> Assertion
+    = \(name : Text) ->
+      \(s : LinuxKernelParameterState) ->
+        { kind = "linux_kernel_parameter"
+        , primaryKey = name
+        , attrs = linuxKernelParameterStateAttrs s
+        }
+
+let cgroup
+    : Text -> CgroupState -> Assertion
+    = \(name : Text) ->
+      \(s : CgroupState) ->
+        { kind = "cgroup", primaryKey = name, attrs = cgroupStateAttrs s }
+
 in  { AttrValue         = AttrValue
     , Assertion         = Assertion
     , ServiceState      = ServiceState
@@ -382,6 +481,11 @@ in  { AttrValue         = AttrValue
     , IpnatState          = IpnatState
     , IptablesState       = IptablesState
     , RoutingTableState   = RoutingTableState
+    , SelinuxState              = SelinuxState
+    , SelinuxModuleState        = SelinuxModuleState
+    , LinuxAuditSystemState     = LinuxAuditSystemState
+    , LinuxKernelParameterState = LinuxKernelParameterState
+    , CgroupState               = CgroupState
     , service           = service
     , package           = package
     , port              = port
@@ -402,5 +506,10 @@ in  { AttrValue         = AttrValue
     , ipnat             = ipnat
     , iptables          = iptables
     , routingTable      = routingTable
+    , selinux               = selinux
+    , selinuxModule         = selinuxModule
+    , linuxAuditSystem      = linuxAuditSystem
+    , linuxKernelParameter  = linuxKernelParameter
+    , cgroup                = cgroup
     , targetBackend     = "serverspec"
     }
