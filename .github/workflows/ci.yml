@@ -35,6 +35,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-ghc${{ steps.setup.outputs.ghc-version }}-
 
+      - name: Patch freeze for Windows zlib (use bundled-c-zlib, no pkg-config)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/zlib -bundled-c-zlib +non-blocking-ffi +pkg-config/zlib +bundled-c-zlib +non-blocking-ffi -pkg-config/' cabal.project.freeze
+          grep '^             zlib ' cabal.project.freeze
+
       - run: cabal update
       - run: cabal build all --enable-tests
       - run: cabal test all --test-show-details=streaming
