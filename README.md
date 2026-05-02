@@ -192,6 +192,10 @@ matching `*State` union.
 | Docker container | `dockerContainer : Text -> DockerContainerState -> Assertion` | `Exist`, `Running`, `HasVolume : Text` |
 | Docker image | `dockerImage : Text -> DockerImageState -> Assertion` | `Exist` |
 | LXC | `lxc : Text -> LxcState -> Assertion` | `Exist`, `Running` |
+| IIS app pool | `iisAppPool : Text -> IisAppPoolState -> Assertion` | `Exist`, `HasDotnetVersion : Text` |
+| IIS website | `iisWebsite : Text -> IisWebsiteState -> Assertion` | `Exist`, `Enabled`, `Running`, `InAppPool : Text` |
+| Windows feature | `windowsFeature : Text -> WindowsFeatureState -> Assertion` | `Installed` |
+| Windows registry key | `windowsRegistryKey : Text -> WindowsRegistryKeyState -> Assertion` | `Exist`, `HasProperty : Text`, `HasValue : Text` |
 
 To express more than one state for the same resource (e.g. nginx must be both
 running and enabled), write two assertions with the same primary key — they

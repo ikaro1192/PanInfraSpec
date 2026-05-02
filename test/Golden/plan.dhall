@@ -65,5 +65,14 @@ in  Plan.make Spec.targetBackend
           , Spec.dockerImage "nginx:latest" Spec.DockerImageState.Exist
           , Spec.lxc "container1" Spec.LxcState.Exist
           , Spec.lxc "container1" Spec.LxcState.Running
+          , Spec.iisAppPool "DefaultAppPool" Spec.IisAppPoolState.Exist
+          , Spec.iisAppPool "DefaultAppPool" (Spec.IisAppPoolState.HasDotnetVersion "v4.0")
+          , Spec.iisWebsite "Default Web Site" Spec.IisWebsiteState.Exist
+          , Spec.iisWebsite "Default Web Site" Spec.IisWebsiteState.Running
+          , Spec.iisWebsite "Default Web Site" (Spec.IisWebsiteState.InAppPool "DefaultAppPool")
+          , Spec.windowsFeature "Minesweeper" Spec.WindowsFeatureState.Installed
+          , Spec.windowsRegistryKey "HKLM\\SOFTWARE\\Test" Spec.WindowsRegistryKeyState.Exist
+          , Spec.windowsRegistryKey "HKLM\\SOFTWARE\\Test" (Spec.WindowsRegistryKeyState.HasProperty "MyProperty")
+          , Spec.windowsRegistryKey "HKLM\\SOFTWARE\\Test" (Spec.WindowsRegistryKeyState.HasValue "MyValue")
           ]
       ]

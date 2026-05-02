@@ -57,6 +57,17 @@ describe host('example.jp') do
   it { should be_resolvable }
 end
 
+describe iis_app_pool('DefaultAppPool') do
+  it { should have_dotnet_version 'v4.0' }
+  it { should exist }
+end
+
+describe iis_website('Default Web Site') do
+  it { should exist }
+  it { should be_in_app_pool 'DefaultAppPool' }
+  it { should be_running }
+end
+
 describe interface('eth0') do
   it { should exist }
   it { should have_ipv4_address '10.0.1.10' }
@@ -140,4 +151,14 @@ describe user('nginx') do
   it { should have_home_directory '/var/lib/nginx' }
   it { should have_login_shell '/usr/sbin/nologin' }
   it { should have_uid 101 }
+end
+
+describe windows_feature('Minesweeper') do
+  it { should be_installed }
+end
+
+describe windows_registry_key('HKLM\\SOFTWARE\\Test') do
+  it { should exist }
+  it { should have_property 'MyProperty' }
+  it { should have_value 'MyValue' }
 end

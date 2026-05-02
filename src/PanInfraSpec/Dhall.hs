@@ -41,6 +41,8 @@ backendAllowedKinds = \case
     , "selinux", "selinux_module", "linux_audit_system"
     , "linux_kernel_parameter", "cgroup"
     , "docker_container", "docker_image", "lxc"
+    , "iis_app_pool", "iis_website"
+    , "windows_feature", "windows_registry_key"
     ]
   _            -> []
 

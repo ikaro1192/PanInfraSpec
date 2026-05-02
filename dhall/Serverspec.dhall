@@ -92,6 +92,25 @@ let DockerContainerState =
 let DockerImageState = < Exist >
 let LxcState = < Exist | Running >
 
+-- PR-4 Windows resources ----------------------------------------------------
+
+let IisAppPoolState =
+      < Exist
+      | HasDotnetVersion : Text
+      >
+let IisWebsiteState =
+      < Exist
+      | Enabled
+      | Running
+      | InAppPool : Text
+      >
+let WindowsFeatureState = < Installed >
+let WindowsRegistryKeyState =
+      < Exist
+      | HasProperty : Text
+      | HasValue    : Text
+      >
+
 
 
 -- Attribute encoders --------------------------------------------------------
@@ -315,6 +334,36 @@ let lxcStateAttrs =
           }
           s
 
+let iisAppPoolStateAttrs =
+      \(s : IisAppPoolState) ->
+        merge
+          { Exist            = toMap { exist = AttrValue.AVBool True }
+          , HasDotnetVersion = \(v : Text) -> toMap { dotnet_version = AttrValue.AVText v }
+          }
+          s
+
+let iisWebsiteStateAttrs =
+      \(s : IisWebsiteState) ->
+        merge
+          { Exist     = toMap { exist   = AttrValue.AVBool True }
+          , Enabled   = toMap { enabled = AttrValue.AVBool True }
+          , Running   = toMap { running = AttrValue.AVBool True }
+          , InAppPool = \(p : Text) -> toMap { in_app_pool = AttrValue.AVText p }
+          }
+          s
+
+let windowsFeatureStateAttrs =
+      \(_ : WindowsFeatureState) -> toMap { installed = AttrValue.AVBool True }
+
+let windowsRegistryKeyStateAttrs =
+      \(s : WindowsRegistryKeyState) ->
+        merge
+          { Exist       = toMap { exist = AttrValue.AVBool True }
+          , HasProperty = \(p : Text) -> toMap { property = AttrValue.AVText p }
+          , HasValue    = \(v : Text) -> toMap { value    = AttrValue.AVText v }
+          }
+          s
+
 -- Smart constructors --------------------------------------------------------
 
 let service
@@ -513,6 +562,42 @@ let lxc
       \(s : LxcState) ->
         { kind = "lxc", primaryKey = name, attrs = lxcStateAttrs s }
 
+let iisAppPool
+    : Text -> IisAppPoolState -> Assertion
+    = \(name : Text) ->
+      \(s : IisAppPoolState) ->
+        { kind = "iis_app_pool"
+        , primaryKey = name
+        , attrs = iisAppPoolStateAttrs s
+        }
+
+let iisWebsite
+    : Text -> IisWebsiteState -> Assertion
+    = \(name : Text) ->
+      \(s : IisWebsiteState) ->
+        { kind = "iis_website"
+        , primaryKey = name
+        , attrs = iisWebsiteStateAttrs s
+        }
+
+let windowsFeature
+    : Text -> WindowsFeatureState -> Assertion
+    = \(name : Text) ->
+      \(s : WindowsFeatureState) ->
+        { kind = "windows_feature"
+        , primaryKey = name
+        , attrs = windowsFeatureStateAttrs s
+        }
+
+let windowsRegistryKey
+    : Text -> WindowsRegistryKeyState -> Assertion
+    = \(path : Text) ->
+      \(s : WindowsRegistryKeyState) ->
+        { kind = "windows_registry_key"
+        , primaryKey = path
+        , attrs = windowsRegistryKeyStateAttrs s
+        }
+
 in  { AttrValue         = AttrValue
     , Assertion         = Assertion
     , ServiceState      = ServiceState
@@ -543,6 +628,10 @@ in  { AttrValue         = AttrValue
     , DockerContainerState      = DockerContainerState
     , DockerImageState          = DockerImageState
     , LxcState                  = LxcState
+    , IisAppPoolState           = IisAppPoolState
+    , IisWebsiteState           = IisWebsiteState
+    , WindowsFeatureState       = WindowsFeatureState
+    , WindowsRegistryKeyState   = WindowsRegistryKeyState
     , service           = service
     , package           = package
     , port              = port
@@ -571,5 +660,9 @@ in  { AttrValue         = AttrValue
     , dockerContainer       = dockerContainer
     , dockerImage           = dockerImage
     , lxc                   = lxc
+    , iisAppPool            = iisAppPool
+    , iisWebsite            = iisWebsite
+    , windowsFeature        = windowsFeature
+    , windowsRegistryKey    = windowsRegistryKey
     , targetBackend     = "serverspec"
     }

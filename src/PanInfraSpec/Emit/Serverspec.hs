@@ -111,6 +111,23 @@ serverspecSchema = Map.fromList
       [ ("exist", ATBool) ])
   , ("lxc", Map.fromList
       [ ("exist", ATBool), ("running", ATBool) ])
+  , ("iis_app_pool", Map.fromList
+      [ ("exist",          ATBool)
+      , ("dotnet_version", ATText)
+      ])
+  , ("iis_website", Map.fromList
+      [ ("exist",       ATBool)
+      , ("enabled",     ATBool)
+      , ("running",     ATBool)
+      , ("in_app_pool", ATText)
+      ])
+  , ("windows_feature", Map.fromList
+      [ ("installed", ATBool) ])
+  , ("windows_registry_key", Map.fromList
+      [ ("exist",    ATBool)
+      , ("property", ATText)
+      , ("value",    ATText)
+      ])
   ]
 
 -- | Kinds whose @describe@ block takes no primary-key argument
@@ -306,6 +323,20 @@ formatItLine "docker_image" "exist"       _          = "it { should exist }"
 -- lxc
 formatItLine "lxc"       "exist"          _          = "it { should exist }"
 formatItLine "lxc"       "running"        _          = "it { should be_running }"
+-- iis_app_pool
+formatItLine "iis_app_pool" "exist"          _          = "it { should exist }"
+formatItLine "iis_app_pool" "dotnet_version" (AVText v) = "it { should have_dotnet_version " <> rubyString v <> " }"
+-- iis_website
+formatItLine "iis_website" "exist"          _          = "it { should exist }"
+formatItLine "iis_website" "enabled"        _          = "it { should be_enabled }"
+formatItLine "iis_website" "running"        _          = "it { should be_running }"
+formatItLine "iis_website" "in_app_pool"    (AVText p) = "it { should be_in_app_pool " <> rubyString p <> " }"
+-- windows_feature
+formatItLine "windows_feature" "installed"  _          = "it { should be_installed }"
+-- windows_registry_key
+formatItLine "windows_registry_key" "exist"    _          = "it { should exist }"
+formatItLine "windows_registry_key" "property" (AVText p) = "it { should have_property " <> rubyString p <> " }"
+formatItLine "windows_registry_key" "value"    (AVText v) = "it { should have_value " <> rubyString v <> " }"
 formatItLine k key _ =
   "# UNREACHABLE: unmatched (" <> pretty k <> ", " <> pretty key <> ")"
 
