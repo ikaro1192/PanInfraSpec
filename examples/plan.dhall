@@ -15,7 +15,7 @@ let nginxSpec
     = [ Spec.package "nginx" Spec.PackageState.Installed
       , Spec.service "nginx" Spec.ServiceState.Running
       , Spec.service "nginx" Spec.ServiceState.Enabled
-      , Spec.port 80 Spec.PortState.Listening
+      , Spec.port 80 (Spec.PortState.WithProtocol "tcp")
       , Spec.file "/etc/nginx/nginx.conf" Spec.FileState.Exist
       , Spec.file "/var/log/nginx" (Spec.FileState.OwnedBy "nginx")
       , Spec.file "/var/log/nginx" (Spec.FileState.Mode 644)

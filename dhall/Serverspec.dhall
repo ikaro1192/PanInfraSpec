@@ -3,7 +3,24 @@
 -- Smart constructors enforce Resource × State pairing at the input boundary
 -- (Defense-in-depth layer 1). See specification.md §3.2 / §5.4.
 
-let AttrValue = < AVText : Text | AVNat : Natural | AVBool : Bool >
+let CompareOp = < Lt | Le | Gt | Ge | Eq >
+
+let AttrLeaf =
+      < ALText   : Text
+      | ALNat    : Natural
+      | ALBool   : Bool
+      | ALSymbol : Text
+      >
+
+let AttrValue =
+      < AVText    : Text
+      | AVNat     : Natural
+      | AVBool    : Bool
+      | AVSymbol  : Text
+      | AVList    : List AttrLeaf
+      | AVRecord  : List { mapKey : Text, mapValue : AttrLeaf }
+      | AVCompare : { op : CompareOp, value : AttrLeaf }
+      >
 
 let Assertion =
       { kind       : Text
@@ -15,7 +32,7 @@ let Assertion =
 
 let ServiceState = < Running | Enabled >
 let PackageState = < Installed >
-let PortState    = < Listening >
+let PortState    = < Listening | WithProtocol : Text >
 let CommandState = < ExitCode : Natural >
 
 -- Phase 2 expanded states ---------------------------------------------------
@@ -67,7 +84,17 @@ let packageStateAttrs =
       \(_ : PackageState) -> toMap { installed = AttrValue.AVBool True }
 
 let portStateAttrs =
-      \(_ : PortState) -> toMap { listening = AttrValue.AVBool True }
+      \(s : PortState) ->
+        merge
+          { Listening    = toMap { listening = AttrValue.AVBool True }
+          , WithProtocol =
+              \(p : Text) ->
+                toMap
+                  { listening = AttrValue.AVBool True
+                  , protocol  = AttrValue.AVText p
+                  }
+          }
+          s
 
 let fileStateAttrs =
       \(s : FileState) ->
@@ -205,6 +232,8 @@ let kernelModule
         { kind = "kernel-module", primaryKey = name, attrs = kernelModuleStateAttrs s }
 
 in  { AttrValue         = AttrValue
+    , AttrLeaf          = AttrLeaf
+    , CompareOp         = CompareOp
     , Assertion         = Assertion
     , ServiceState      = ServiceState
     , PackageState      = PackageState

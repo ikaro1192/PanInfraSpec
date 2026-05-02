@@ -1,6 +1,8 @@
 module PanInfraSpec.IR
   ( Role (..)
   , Node (..)
+  , CompareOp (..)
+  , AttrLeaf (..)
   , AttrValue (..)
   , Assertion (..)
   , Selector (..)
@@ -41,20 +43,69 @@ instance Dhall.FromDhall Node where
       <*> Dhall.field "role"     Dhall.auto
       <*> Dhall.field "tags"     Dhall.auto
 
+-- | Comparison operator for 'AVCompare'. Mirrors the Dhall union
+-- @< Lt | Le | Gt | Ge | Eq >@. Used for matchers like
+-- @validity_in_days should be > 30@.
+data CompareOp = OpLt | OpLe | OpGt | OpGe | OpEq
+  deriving stock (Show, Eq, Generic)
+
+instance Dhall.FromDhall CompareOp where
+  autoWith _ = Dhall.union
+    (  (OpLt <$ Dhall.constructor "Lt" Dhall.unit)
+    <> (OpLe <$ Dhall.constructor "Le" Dhall.unit)
+    <> (OpGt <$ Dhall.constructor "Gt" Dhall.unit)
+    <> (OpGe <$ Dhall.constructor "Ge" Dhall.unit)
+    <> (OpEq <$ Dhall.constructor "Eq" Dhall.unit)
+    )
+
+-- | Scalar leaf carried inside compound 'AttrValue' constructors
+-- ('AVList', 'AVRecord', 'AVCompare'). Dhall lacks recursive types, so the
+-- nested element type is a separate, non-recursive union (the same trick
+-- used for 'Selector' boolean composition).
+data AttrLeaf
+  = ALText   Text
+  | ALNat    Natural
+  | ALBool   Bool
+  | ALSymbol Text
+  deriving stock (Show, Eq, Generic)
+
+instance Dhall.FromDhall AttrLeaf where
+  autoWith _ = Dhall.union
+    (  (ALText   <$> Dhall.constructor "ALText"   Dhall.auto)
+    <> (ALNat    <$> Dhall.constructor "ALNat"    Dhall.auto)
+    <> (ALBool   <$> Dhall.constructor "ALBool"   Dhall.auto)
+    <> (ALSymbol <$> Dhall.constructor "ALSymbol" Dhall.auto)
+    )
+
 -- | Attribute value carried inside an 'Assertion'. Mirrors the Dhall union
--- @< AVText : Text | AVNat : Natural | AVBool : Bool >@.
+-- declared in @dhall/Serverspec.dhall@. The compound constructors
+-- ('AVList', 'AVRecord', 'AVCompare') carry 'AttrLeaf' instead of
+-- 'AttrValue' to stay within Dhall's non-recursive type system.
 data AttrValue
-  = AVText Text
-  | AVNat  Natural
-  | AVBool Bool
+  = AVText    Text
+  | AVNat     Natural
+  | AVBool    Bool
+  | AVSymbol  Text
+  | AVList    [AttrLeaf]
+  | AVRecord  (Map Text AttrLeaf)
+  | AVCompare CompareOp AttrLeaf
   deriving stock (Show, Eq, Generic)
 
 instance Dhall.FromDhall AttrValue where
   autoWith _ = Dhall.union
-    (  (AVText <$> Dhall.constructor "AVText" Dhall.auto)
-    <> (AVNat  <$> Dhall.constructor "AVNat"  Dhall.auto)
-    <> (AVBool <$> Dhall.constructor "AVBool" Dhall.auto)
+    (  (AVText    <$> Dhall.constructor "AVText"    Dhall.auto)
+    <> (AVNat     <$> Dhall.constructor "AVNat"     Dhall.auto)
+    <> (AVBool    <$> Dhall.constructor "AVBool"    Dhall.auto)
+    <> (AVSymbol  <$> Dhall.constructor "AVSymbol"  Dhall.auto)
+    <> (AVList    <$> Dhall.constructor "AVList"    Dhall.auto)
+    <> (AVRecord  <$> Dhall.constructor "AVRecord"  Dhall.auto)
+    <> (mkCompare <$> Dhall.constructor "AVCompare" cmpRecord)
     )
+    where
+      mkCompare (op, v) = AVCompare op v
+      cmpRecord = Dhall.record $
+        (,) <$> Dhall.field "op"    Dhall.auto
+            <*> Dhall.field "value" Dhall.auto
 
 -- | Generic Semantic AST element. The pair @(aKind, aPrimaryKey)@ is the
 -- groupBy key the emitter uses to fold multiple state assertions for the same

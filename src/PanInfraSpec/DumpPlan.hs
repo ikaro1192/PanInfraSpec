@@ -51,9 +51,30 @@ renderAttrs m =
 
 renderValue :: AttrValue -> Text
 renderValue = \case
-  AVText t -> "\"" <> t <> "\""
-  AVNat  n -> tshow n
-  AVBool b -> if b then "True" else "False"
+  AVText    t   -> "\"" <> t <> "\""
+  AVNat     n   -> tshow n
+  AVBool    b   -> if b then "True" else "False"
+  AVSymbol  s   -> ":" <> s
+  AVList    xs  -> "[" <> T.intercalate ", " (map renderLeaf xs) <> "]"
+  AVRecord  m   -> "{" <> T.intercalate ", "
+                     [ k <> "=" <> renderLeaf v | (k, v) <- Map.toAscList m ]
+                <> "}"
+  AVCompare o v -> renderOp o <> " " <> renderLeaf v
+
+renderLeaf :: AttrLeaf -> Text
+renderLeaf = \case
+  ALText   t -> "\"" <> t <> "\""
+  ALNat    n -> tshow n
+  ALBool   b -> if b then "True" else "False"
+  ALSymbol s -> ":" <> s
+
+renderOp :: CompareOp -> Text
+renderOp = \case
+  OpLt -> "<"
+  OpLe -> "<="
+  OpGt -> ">"
+  OpGe -> ">="
+  OpEq -> "=="
 
 quoted :: Text -> Text
 quoted t = "\"" <> t <> "\""

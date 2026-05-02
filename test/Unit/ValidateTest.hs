@@ -20,6 +20,8 @@ tests = testGroup "defense-in-depth"
   , testCase "layer 3: rejects conflicting attrs"   layer3ConflictingAttrs
   , testCase "layer 3: rejects empty attrs"         layer3EmptyAttrs
   , testCase "layer 3: rejects backend mismatch"    layer3BackendMismatch
+  , testCase "layer 3: rejects port.protocol wrong type" layer3WrongProtocolType
+  , testCase "layer 3: rejects unknown port attr"   layer3UnknownPortAttr
   ]
 
 assertLeftContains :: Text -> Either Text a -> IO ()
@@ -76,3 +78,15 @@ layer3BackendMismatch =
   -- exercise the dispatcher path which produces the equivalent guarantee.
   let ep = ExecutionPlan "" []
   in assertLeftContains "unknown backend" (emitFor ep)
+
+layer3WrongProtocolType :: IO ()
+layer3WrongProtocolType =
+  let bad = Assertion "port" "80" (Map.fromList [("protocol", AVNat 80)])
+      ep  = ExecutionPlan "serverspec" [Job (mkNode "h") [bad]]
+  in assertLeftContains "wrong attr type for port.protocol" (emitFor ep)
+
+layer3UnknownPortAttr :: IO ()
+layer3UnknownPortAttr =
+  let bad = Assertion "port" "80" (Map.fromList [("tcp_only", AVBool True)])
+      ep  = ExecutionPlan "serverspec" [Job (mkNode "h") [bad]]
+  in assertLeftContains "unknown attrs key for kind port" (emitFor ep)

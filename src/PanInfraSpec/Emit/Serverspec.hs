@@ -23,7 +23,9 @@ import Prettyprinter.Render.Text (renderStrict)
 import PanInfraSpec.IR
 
 -- | Schema tag for an 'AttrValue'. Used by layer-3 validation only.
-data AttrTag = ATText | ATNat | ATBool
+data AttrTag
+  = ATText | ATNat | ATBool
+  | ATSymbol | ATList | ATRecord | ATCompare
   deriving stock (Eq, Show)
 
 -- | Per-kind allowed @(attrKey, expected tag)@ table. Authoritative source of
@@ -35,7 +37,7 @@ serverspecSchema = Map.fromList
   , ("package", Map.fromList
       [ ("installed", ATBool) ])
   , ("port", Map.fromList
-      [ ("listening", ATBool) ])
+      [ ("listening", ATBool), ("protocol", ATText) ])
   , ("file", Map.fromList
       [ ("exist",        ATBool)
       , ("owned_by",     ATText)
@@ -72,21 +74,33 @@ serverspecSchema = Map.fromList
 
 tagOf :: AttrValue -> AttrTag
 tagOf = \case
-  AVText _ -> ATText
-  AVNat  _ -> ATNat
-  AVBool _ -> ATBool
+  AVText    _   -> ATText
+  AVNat     _   -> ATNat
+  AVBool    _   -> ATBool
+  AVSymbol  _   -> ATSymbol
+  AVList    _   -> ATList
+  AVRecord  _   -> ATRecord
+  AVCompare _ _ -> ATCompare
 
 showTag :: AttrTag -> Text
 showTag = \case
-  ATText -> "Text"
-  ATNat  -> "Natural"
-  ATBool -> "Bool"
+  ATText    -> "Text"
+  ATNat     -> "Natural"
+  ATBool    -> "Bool"
+  ATSymbol  -> "Symbol"
+  ATList    -> "List"
+  ATRecord  -> "Record"
+  ATCompare -> "Compare"
 
 showVal :: AttrValue -> Text
 showVal = \case
-  AVText t -> "AVText " <> t
-  AVNat  n -> "AVNat "  <> T.pack (show n)
-  AVBool b -> "AVBool " <> T.pack (show b)
+  AVText    t   -> "AVText "    <> t
+  AVNat     n   -> "AVNat "     <> T.pack (show n)
+  AVBool    b   -> "AVBool "    <> T.pack (show b)
+  AVSymbol  s   -> "AVSymbol "  <> s
+  AVList    xs  -> "AVList "    <> T.pack (show xs)
+  AVRecord  m   -> "AVRecord "  <> T.pack (show m)
+  AVCompare o v -> "AVCompare " <> T.pack (show (o, v))
 
 -- | Layer-3 validation: kind ∈ schema, attrs non-empty, every attr key ∈
 -- schema for that kind, every attr value's tag matches the expected tag, and
@@ -209,13 +223,29 @@ kindToRubyResource = \case
   "kernel-module" -> "kernel_module"
   k               -> k
 
+-- | Render the @it { ... }@ lines of a @describe@ block. Indirection over
+-- 'formatItLine' so that compound matchers can fold multiple attribute keys
+-- into a single line by inspecting siblings via @attrs@.
+renderAttrs :: Text -> Map Text AttrValue -> [Doc ann]
+-- port: when @protocol@ is present, collapse it (and any sibling @listening@)
+-- into a single @be_listening.with('proto')@ line. The @listening@ flag is
+-- always implied by specifying a protocol, so it is always consumed here.
+renderAttrs "port" attrs
+  | Just (AVText proto) <- Map.lookup "protocol" attrs
+  = "it { should be_listening.with(" <> rubyString proto <> ") }"
+    : [ formatItLine "port" key val
+      | (key, val) <- Map.toAscList (Map.delete "listening" (Map.delete "protocol" attrs))
+      ]
+renderAttrs k attrs =
+  [ formatItLine k key val | (key, val) <- Map.toAscList attrs ]
+
 -- | Render one merged 'Assertion' as a @describe ... do ... end@ block.
 formatGroup :: Assertion -> Either Text (Doc ann)
 formatGroup (Assertion k pk attrs) = do
   hd <- primaryDoc k pk
   let resource = pretty (kindToRubyResource k)
       header = "describe" <+> resource <> "(" <> hd <> ")" <+> "do"
-      body   = vsep [ formatItLine k key val | (key, val) <- Map.toAscList attrs ]
+      body   = vsep (renderAttrs k attrs)
   pure $ vsep [header, indent 2 body, "end"]
 
 -- | Render a 'Job' as a @(filename, content)@ pair.
