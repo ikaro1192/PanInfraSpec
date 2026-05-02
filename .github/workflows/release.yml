@@ -1,0 +1,247 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: setup
+        # haskell-actions/setup@v2.11.0
+        uses: haskell-actions/setup@cd0d9bdd65b20557f41bea4dbe43d0b5fbbfe553
+        with:
+          ghc-version: '9.6.7'
+          cabal-version: '3.10'
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.setup.outputs.cabal-store }}
+            dist-newstyle
+          key: ${{ runner.os }}-ghc${{ steps.setup.outputs.ghc-version }}-${{ hashFiles('**/cabal.project.freeze', '**/*.cabal') }}
+          restore-keys: |
+            ${{ runner.os }}-ghc${{ steps.setup.outputs.ghc-version }}-
+
+      - run: cabal update
+      - run: cabal build all --enable-tests
+      - run: cabal test all --test-show-details=streaming
+
+  build-linux:
+    name: build linux ${{ matrix.arch }}
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: setup
+        # haskell-actions/setup@v2.11.0
+        uses: haskell-actions/setup@cd0d9bdd65b20557f41bea4dbe43d0b5fbbfe553
+        with:
+          ghc-version: '9.6.7'
+          cabal-version: '3.10'
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.setup.outputs.cabal-store }}
+            dist-newstyle
+          key: ${{ runner.os }}-${{ matrix.arch }}-ghc${{ steps.setup.outputs.ghc-version }}-${{ hashFiles('**/cabal.project.freeze', '**/*.cabal') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-ghc${{ steps.setup.outputs.ghc-version }}-
+
+      - run: cabal update
+      - run: cabal build exe:paninfraspec-gen
+
+      - name: Install fpm and rpmbuild
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+          sudo gem install --no-document fpm
+
+      - name: Package .deb and .rpm
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          BIN=$(cabal list-bin exe:paninfraspec-gen)
+          mkdir -p staging/usr/local/bin
+          cp "$BIN" staging/usr/local/bin/paninfraspec-gen
+          strip staging/usr/local/bin/paninfraspec-gen
+          mkdir -p out
+          for fmt in deb rpm; do
+            fpm -s dir -t "$fmt" \
+                -n paninfraspec \
+                -v "$VERSION" \
+                -a ${{ matrix.arch }} \
+                --license MIT \
+                --description 'Multi-input/multi-output compiler for infra specs (Serverspec generator)' \
+                --url "https://github.com/${{ github.repository }}" \
+                -p out/ \
+                -C staging .
+          done
+          ls -la out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: out/*
+          if-no-files-found: error
+
+  build-macos:
+    name: build macos ${{ matrix.arch }}
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: macos-13
+          - arch: arm64
+            runner: macos-14
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: setup
+        # haskell-actions/setup@v2.11.0
+        uses: haskell-actions/setup@cd0d9bdd65b20557f41bea4dbe43d0b5fbbfe553
+        with:
+          ghc-version: '9.6.7'
+          cabal-version: '3.10'
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.setup.outputs.cabal-store }}
+            dist-newstyle
+          key: ${{ runner.os }}-${{ matrix.arch }}-ghc${{ steps.setup.outputs.ghc-version }}-${{ hashFiles('**/cabal.project.freeze', '**/*.cabal') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-ghc${{ steps.setup.outputs.ghc-version }}-
+
+      - run: cabal update
+      - run: cabal build exe:paninfraspec-gen
+
+      - name: Package tarball
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          NAME="paninfraspec-${VERSION}-darwin-${{ matrix.arch }}"
+          BIN=$(cabal list-bin exe:paninfraspec-gen)
+          mkdir -p "$NAME/bin"
+          cp "$BIN" "$NAME/bin/paninfraspec-gen"
+          strip "$NAME/bin/paninfraspec-gen"
+          cp LICENSE README.md "$NAME"/
+          mkdir -p out
+          tar -czf "out/$NAME.tar.gz" "$NAME"
+          ls -la out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: out/*
+          if-no-files-found: error
+
+  build-windows:
+    name: build windows x86_64
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: setup
+        # haskell-actions/setup@v2.11.0
+        uses: haskell-actions/setup@cd0d9bdd65b20557f41bea4dbe43d0b5fbbfe553
+        with:
+          ghc-version: '9.6.7'
+          cabal-version: '3.10'
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.setup.outputs.cabal-store }}
+            dist-newstyle
+          key: ${{ runner.os }}-x86_64-ghc${{ steps.setup.outputs.ghc-version }}-${{ hashFiles('**/cabal.project.freeze', '**/*.cabal') }}
+          restore-keys: |
+            ${{ runner.os }}-x86_64-ghc${{ steps.setup.outputs.ghc-version }}-
+
+      - run: cabal update
+      - run: cabal build exe:paninfraspec-gen
+
+      - name: Package zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          NAME="paninfraspec-${VERSION}-windows-x86_64"
+          BIN=$(cabal list-bin exe:paninfraspec-gen)
+          mkdir -p "$NAME"
+          cp "$BIN" "$NAME/paninfraspec-gen.exe"
+          cp LICENSE README.md "$NAME"/
+          # Bundle non-system runtime DLLs (mingw / ghc) detected via ldd from Git Bash.
+          # System DLLs under /c/Windows are excluded.
+          ldd "$BIN" | awk '/=>/ && $3 !~ /^\/c\/[Ww]indows/ {print $3}' | sort -u | while read -r dll; do
+            if [ -f "$dll" ]; then
+              cp "$dll" "$NAME"/
+            fi
+          done
+          mkdir -p out
+          7z a "out/$NAME.zip" "$NAME" >/dev/null
+          ls -la out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: out/*
+          if-no-files-found: error
+
+  release:
+    name: create github release
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List downloaded assets
+        run: ls -la dist/
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          assets=( dist/*.deb dist/*.rpm dist/*.tar.gz dist/*.zip )
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No release assets found in dist/" >&2
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            "${assets[@]}"
