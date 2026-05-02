@@ -36,6 +36,8 @@ backendAllowedKinds = \case
   "serverspec" ->
     [ "service", "package", "port", "file", "command"
     , "user", "group", "process", "mount", "interface", "kernel-module"
+    , "bond", "bridge", "default_gateway", "host"
+    , "ip6tables", "ipfilter", "ipnat", "iptables", "routing_table"
     ]
   _            -> []
 
