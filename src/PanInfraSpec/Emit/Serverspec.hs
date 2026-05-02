@@ -128,6 +128,25 @@ serverspecSchema = Map.fromList
       , ("property", ATText)
       , ("value",    ATText)
       ])
+  , ("cron", Map.empty)  -- wildcard + singleton: each attr key is an entry string
+  , ("mail_alias", Map.fromList
+      [ ("aliased_to", ATText) ])
+  , ("mysql_config", Map.fromList
+      [ ("value", ATText) ])
+  , ("php_config", Map.fromList
+      [ ("value", ATText) ])
+  , ("ppa", Map.fromList
+      [ ("exist", ATBool), ("enabled", ATBool) ])
+  , ("yumrepo", Map.fromList
+      [ ("exist", ATBool), ("enabled", ATBool) ])
+  , ("x509_certificate", Map.fromList
+      [ ("certificate", ATBool), ("valid", ATBool) ])
+  , ("x509_private_key", Map.fromList
+      [ ("valid",                ATBool)
+      , ("encrypted",            ATBool)
+      , ("matching_certificate", ATText)
+      ])
+  , ("zfs", Map.empty)  -- wildcard: each attr key is a zfs property name
   ]
 
 -- | Kinds whose @describe@ block takes no primary-key argument
@@ -140,6 +159,7 @@ singletonKinds = Set.fromList
   , "routing_table"
   , "selinux"
   , "linux_audit_system"
+  , "cron"
   ]
 
 tagOf :: AttrValue -> AttrTag
@@ -337,6 +357,32 @@ formatItLine "windows_feature" "installed"  _          = "it { should be_install
 formatItLine "windows_registry_key" "exist"    _          = "it { should exist }"
 formatItLine "windows_registry_key" "property" (AVText p) = "it { should have_property " <> rubyString p <> " }"
 formatItLine "windows_registry_key" "value"    (AVText v) = "it { should have_value " <> rubyString v <> " }"
+-- cron (wildcard + singleton): each attr key is the entry string itself
+formatItLine "cron"      key              _          =
+  "it { should have_entry " <> rubyString key <> " }"
+-- mail_alias
+formatItLine "mail_alias" "aliased_to"    (AVText v) = "it { should be_aliased_to " <> rubyString v <> " }"
+-- mysql_config
+formatItLine "mysql_config" "value"       (AVText v) = "its(:value) { should eq " <> rubyString v <> " }"
+-- php_config
+formatItLine "php_config" "value"         (AVText v) = "its(:value) { should eq " <> rubyString v <> " }"
+-- ppa
+formatItLine "ppa"       "exist"          _          = "it { should exist }"
+formatItLine "ppa"       "enabled"        _          = "it { should be_enabled }"
+-- yumrepo
+formatItLine "yumrepo"   "exist"          _          = "it { should exist }"
+formatItLine "yumrepo"   "enabled"        _          = "it { should be_enabled }"
+-- x509_certificate
+formatItLine "x509_certificate" "certificate" _      = "it { should be_certificate }"
+formatItLine "x509_certificate" "valid"       _      = "it { should be_valid }"
+-- x509_private_key
+formatItLine "x509_private_key" "valid"               _          = "it { should be_valid }"
+formatItLine "x509_private_key" "encrypted"           _          = "it { should be_encrypted }"
+formatItLine "x509_private_key" "matching_certificate" (AVText p) =
+  "it { should have_matching_certificate " <> rubyString p <> " }"
+-- zfs (wildcard schema): each attr key is a zfs property name
+formatItLine "zfs"       key              (AVText v) =
+  "it { should have_property " <> rubyString key <> " => " <> rubyString v <> " }"
 formatItLine k key _ =
   "# UNREACHABLE: unmatched (" <> pretty k <> ", " <> pretty key <> ")"
 

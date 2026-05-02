@@ -43,6 +43,9 @@ backendAllowedKinds = \case
     , "docker_container", "docker_image", "lxc"
     , "iis_app_pool", "iis_website"
     , "windows_feature", "windows_registry_key"
+    , "cron", "mail_alias", "mysql_config", "php_config"
+    , "ppa", "yumrepo"
+    , "x509_certificate", "x509_private_key", "zfs"
     ]
   _            -> []
 

@@ -196,6 +196,15 @@ matching `*State` union.
 | IIS website | `iisWebsite : Text -> IisWebsiteState -> Assertion` | `Exist`, `Enabled`, `Running`, `InAppPool : Text` |
 | Windows feature | `windowsFeature : Text -> WindowsFeatureState -> Assertion` | `Installed` |
 | Windows registry key | `windowsRegistryKey : Text -> WindowsRegistryKeyState -> Assertion` | `Exist`, `HasProperty : Text`, `HasValue : Text` |
+| Cron (singleton) | `cron : CronState -> Assertion` | `HasEntry : Text` |
+| Mail alias | `mailAlias : Text -> MailAliasState -> Assertion` | `AliasedTo : Text` |
+| MySQL config | `mysqlConfig : Text -> MysqlConfigState -> Assertion` | `HasValue : Text` |
+| PHP config | `phpConfig : Text -> PhpConfigState -> Assertion` | `HasValue : Text` |
+| PPA | `ppa : Text -> PpaState -> Assertion` | `Exist`, `Enabled` |
+| Yumrepo | `yumrepo : Text -> YumrepoState -> Assertion` | `Exist`, `Enabled` |
+| X.509 certificate | `x509Certificate : Text -> X509CertificateState -> Assertion` | `Certificate`, `Valid` |
+| X.509 private key | `x509PrivateKey : Text -> X509PrivateKeyState -> Assertion` | `Valid`, `Encrypted`, `HasMatchingCertificate : Text` |
+| ZFS | `zfs : Text -> ZfsState -> Assertion` | `HasProperty : { name : Text, value : Text }` |
 
 To express more than one state for the same resource (e.g. nginx must be both
 running and enabled), write two assertions with the same primary key — they

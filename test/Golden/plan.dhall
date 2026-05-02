@@ -74,5 +74,24 @@ in  Plan.make Spec.targetBackend
           , Spec.windowsRegistryKey "HKLM\\SOFTWARE\\Test" Spec.WindowsRegistryKeyState.Exist
           , Spec.windowsRegistryKey "HKLM\\SOFTWARE\\Test" (Spec.WindowsRegistryKeyState.HasProperty "MyProperty")
           , Spec.windowsRegistryKey "HKLM\\SOFTWARE\\Test" (Spec.WindowsRegistryKeyState.HasValue "MyValue")
+          , Spec.cron (Spec.CronState.HasEntry "0 4 * * * /usr/sbin/run_daily_jobs")
+          , Spec.cron (Spec.CronState.HasEntry "0 6 * * * /usr/sbin/run_morning_jobs")
+          , Spec.mailAlias "info" (Spec.MailAliasState.AliasedTo "admin")
+          , Spec.mysqlConfig "max_connections" (Spec.MysqlConfigState.HasValue "256")
+          , Spec.phpConfig "default_charset" (Spec.PhpConfigState.HasValue "UTF-8")
+          , Spec.ppa "ppa:nginx/stable" Spec.PpaState.Exist
+          , Spec.ppa "ppa:nginx/stable" Spec.PpaState.Enabled
+          , Spec.yumrepo "epel" Spec.YumrepoState.Exist
+          , Spec.yumrepo "epel" Spec.YumrepoState.Enabled
+          , Spec.x509Certificate "/etc/ssl/cert.pem" Spec.X509CertificateState.Certificate
+          , Spec.x509Certificate "/etc/ssl/cert.pem" Spec.X509CertificateState.Valid
+          , Spec.x509PrivateKey "/etc/ssl/key.pem" Spec.X509PrivateKeyState.Valid
+          , Spec.x509PrivateKey "/etc/ssl/key.pem" Spec.X509PrivateKeyState.Encrypted
+          , Spec.x509PrivateKey "/etc/ssl/key.pem"
+              (Spec.X509PrivateKeyState.HasMatchingCertificate "/etc/ssl/cert.pem")
+          , Spec.zfs "rpool/var"
+              ( Spec.ZfsState.HasProperty
+                  { name = "mountpoint", value = "/var" }
+              )
           ]
       ]

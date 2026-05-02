@@ -111,6 +111,22 @@ let WindowsRegistryKeyState =
       | HasValue    : Text
       >
 
+-- PR-5 middleware & misc resources ------------------------------------------
+
+let CronState = < HasEntry : Text >
+let MailAliasState = < AliasedTo : Text >
+let MysqlConfigState = < HasValue : Text >
+let PhpConfigState = < HasValue : Text >
+let PpaState = < Exist | Enabled >
+let YumrepoState = < Exist | Enabled >
+let X509CertificateState = < Certificate | Valid >
+let X509PrivateKeyState =
+      < Valid
+      | Encrypted
+      | HasMatchingCertificate : Text
+      >
+let ZfsState = < HasProperty : { name : Text, value : Text } >
+
 
 
 -- Attribute encoders --------------------------------------------------------
@@ -364,6 +380,83 @@ let windowsRegistryKeyStateAttrs =
           }
           s
 
+-- cron is a wildcard + singleton kind: each HasEntry stores the entry string
+-- itself as the dynamic mapKey so multiple entries don't conflict on a single
+-- shared attr key. The mapValue is a placeholder; only the key is meaningful.
+let cronStateAttrs =
+      \(s : CronState) ->
+        merge
+          { HasEntry =
+              \(e : Text) ->
+                [ { mapKey = e, mapValue = AttrValue.AVText "" } ]
+          }
+          s
+
+let mailAliasStateAttrs =
+      \(s : MailAliasState) ->
+        merge
+          { AliasedTo = \(t : Text) -> toMap { aliased_to = AttrValue.AVText t } }
+          s
+
+let mysqlConfigStateAttrs =
+      \(s : MysqlConfigState) ->
+        merge
+          { HasValue = \(v : Text) -> toMap { value = AttrValue.AVText v } }
+          s
+
+let phpConfigStateAttrs =
+      \(s : PhpConfigState) ->
+        merge
+          { HasValue = \(v : Text) -> toMap { value = AttrValue.AVText v } }
+          s
+
+let ppaStateAttrs =
+      \(s : PpaState) ->
+        merge
+          { Exist   = toMap { exist   = AttrValue.AVBool True }
+          , Enabled = toMap { enabled = AttrValue.AVBool True }
+          }
+          s
+
+let yumrepoStateAttrs =
+      \(s : YumrepoState) ->
+        merge
+          { Exist   = toMap { exist   = AttrValue.AVBool True }
+          , Enabled = toMap { enabled = AttrValue.AVBool True }
+          }
+          s
+
+let x509CertificateStateAttrs =
+      \(s : X509CertificateState) ->
+        merge
+          { Certificate = toMap { certificate = AttrValue.AVBool True }
+          , Valid       = toMap { valid       = AttrValue.AVBool True }
+          }
+          s
+
+let x509PrivateKeyStateAttrs =
+      \(s : X509PrivateKeyState) ->
+        merge
+          { Valid                  = toMap { valid     = AttrValue.AVBool True }
+          , Encrypted              = toMap { encrypted = AttrValue.AVBool True }
+          , HasMatchingCertificate = \(p : Text) -> toMap { matching_certificate = AttrValue.AVText p }
+          }
+          s
+
+-- zfs is a wildcard kind: each HasProperty pair becomes a (name, value)
+-- attribute whose name is the dynamic mapKey.
+let zfsStateAttrs =
+      \(s : ZfsState) ->
+        merge
+          { HasProperty =
+              \(p : { name : Text, value : Text }) ->
+                [ { mapKey = p.name
+                  , mapValue = AttrValue.AVText p.value
+                  }
+                ]
+          }
+          s
+
 -- Smart constructors --------------------------------------------------------
 
 let service
@@ -598,6 +691,79 @@ let windowsRegistryKey
         , attrs = windowsRegistryKeyStateAttrs s
         }
 
+-- cron is a singleton + wildcard: takes no Text argument, every HasEntry
+-- stores the entry string itself as the dynamic mapKey.
+let cron
+    : CronState -> Assertion
+    = \(s : CronState) ->
+        { kind = "cron"
+        , primaryKey = "cron"
+        , attrs = cronStateAttrs s
+        }
+
+let mailAlias
+    : Text -> MailAliasState -> Assertion
+    = \(name : Text) ->
+      \(s : MailAliasState) ->
+        { kind = "mail_alias"
+        , primaryKey = name
+        , attrs = mailAliasStateAttrs s
+        }
+
+let mysqlConfig
+    : Text -> MysqlConfigState -> Assertion
+    = \(name : Text) ->
+      \(s : MysqlConfigState) ->
+        { kind = "mysql_config"
+        , primaryKey = name
+        , attrs = mysqlConfigStateAttrs s
+        }
+
+let phpConfig
+    : Text -> PhpConfigState -> Assertion
+    = \(name : Text) ->
+      \(s : PhpConfigState) ->
+        { kind = "php_config"
+        , primaryKey = name
+        , attrs = phpConfigStateAttrs s
+        }
+
+let ppa
+    : Text -> PpaState -> Assertion
+    = \(name : Text) ->
+      \(s : PpaState) ->
+        { kind = "ppa", primaryKey = name, attrs = ppaStateAttrs s }
+
+let yumrepo
+    : Text -> YumrepoState -> Assertion
+    = \(name : Text) ->
+      \(s : YumrepoState) ->
+        { kind = "yumrepo", primaryKey = name, attrs = yumrepoStateAttrs s }
+
+let x509Certificate
+    : Text -> X509CertificateState -> Assertion
+    = \(path : Text) ->
+      \(s : X509CertificateState) ->
+        { kind = "x509_certificate"
+        , primaryKey = path
+        , attrs = x509CertificateStateAttrs s
+        }
+
+let x509PrivateKey
+    : Text -> X509PrivateKeyState -> Assertion
+    = \(path : Text) ->
+      \(s : X509PrivateKeyState) ->
+        { kind = "x509_private_key"
+        , primaryKey = path
+        , attrs = x509PrivateKeyStateAttrs s
+        }
+
+let zfs
+    : Text -> ZfsState -> Assertion
+    = \(name : Text) ->
+      \(s : ZfsState) ->
+        { kind = "zfs", primaryKey = name, attrs = zfsStateAttrs s }
+
 in  { AttrValue         = AttrValue
     , Assertion         = Assertion
     , ServiceState      = ServiceState
@@ -632,6 +798,15 @@ in  { AttrValue         = AttrValue
     , IisWebsiteState           = IisWebsiteState
     , WindowsFeatureState       = WindowsFeatureState
     , WindowsRegistryKeyState   = WindowsRegistryKeyState
+    , CronState                 = CronState
+    , MailAliasState            = MailAliasState
+    , MysqlConfigState          = MysqlConfigState
+    , PhpConfigState            = PhpConfigState
+    , PpaState                  = PpaState
+    , YumrepoState              = YumrepoState
+    , X509CertificateState      = X509CertificateState
+    , X509PrivateKeyState       = X509PrivateKeyState
+    , ZfsState                  = ZfsState
     , service           = service
     , package           = package
     , port              = port
@@ -664,5 +839,14 @@ in  { AttrValue         = AttrValue
     , iisWebsite            = iisWebsite
     , windowsFeature        = windowsFeature
     , windowsRegistryKey    = windowsRegistryKey
+    , cron                  = cron
+    , mailAlias             = mailAlias
+    , mysqlConfig           = mysqlConfig
+    , phpConfig             = phpConfig
+    , ppa                   = ppa
+    , yumrepo               = yumrepo
+    , x509Certificate       = x509Certificate
+    , x509PrivateKey        = x509PrivateKey
+    , zfs                   = zfs
     , targetBackend     = "serverspec"
     }

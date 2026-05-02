@@ -18,6 +18,11 @@ describe command('uname -a') do
   its(:exit_status) { should eq 0 }
 end
 
+describe cron do
+  it { should have_entry '0 4 * * * /usr/sbin/run_daily_jobs' }
+  it { should have_entry '0 6 * * * /usr/sbin/run_morning_jobs' }
+end
+
 describe default_gateway do
   its(:interface) { should eq 'eth0' }
   its(:ipaddress) { should eq '10.0.1.1' }
@@ -108,18 +113,35 @@ describe lxc('container1') do
   it { should be_running }
 end
 
+describe mail_alias('info') do
+  it { should be_aliased_to 'admin' }
+end
+
 describe mount('/data') do
   its(:device) { should eq '/dev/sda1' }
   its(:fstype) { should eq 'ext4' }
   it { should be_mounted }
 end
 
+describe mysql_config('max_connections') do
+  its(:value) { should eq '256' }
+end
+
 describe package('nginx') do
   it { should be_installed }
 end
 
+describe php_config('default_charset') do
+  its(:value) { should eq 'UTF-8' }
+end
+
 describe port(80) do
   it { should be_listening }
+end
+
+describe ppa('ppa:nginx/stable') do
+  it { should be_enabled }
+  it { should exist }
 end
 
 describe process('nginx') do
@@ -161,4 +183,24 @@ describe windows_registry_key('HKLM\\SOFTWARE\\Test') do
   it { should exist }
   it { should have_property 'MyProperty' }
   it { should have_value 'MyValue' }
+end
+
+describe x509_certificate('/etc/ssl/cert.pem') do
+  it { should be_certificate }
+  it { should be_valid }
+end
+
+describe x509_private_key('/etc/ssl/key.pem') do
+  it { should be_encrypted }
+  it { should have_matching_certificate '/etc/ssl/cert.pem' }
+  it { should be_valid }
+end
+
+describe yumrepo('epel') do
+  it { should be_enabled }
+  it { should exist }
+end
+
+describe zfs('rpool/var') do
+  it { should have_property 'mountpoint' => '/var' }
 end
