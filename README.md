@@ -184,6 +184,11 @@ matching `*State` union.
 | ipfilter | `ipfilter : Text -> IpfilterState -> Assertion` | `HasRule : Text` |
 | ipnat | `ipnat : Text -> IpnatState -> Assertion` | `HasRule : Text` |
 | Routing table (singleton) | `routingTable : RoutingTableState -> Assertion` | `HasEntry : { destination : Text, gateway : Text }` |
+| SELinux (singleton) | `selinux : SelinuxState -> Assertion` | `Enforcing`, `Permissive`, `Disabled` |
+| SELinux module | `selinuxModule : Text -> SelinuxModuleState -> Assertion` | `Enabled`, `Installed` |
+| Linux audit system (singleton) | `linuxAuditSystem : LinuxAuditSystemState -> Assertion` | `Running`, `Enabled` |
+| Linux kernel parameter | `linuxKernelParameter : Text -> LinuxKernelParameterState -> Assertion` | `HasValue : Text` |
+| Cgroup | `cgroup : Text -> CgroupState -> Assertion` | `HasParameter : { name : Text, value : Text }` |
 
 To express more than one state for the same resource (e.g. nginx must be both
 running and enabled), write two assertions with the same primary key — they
