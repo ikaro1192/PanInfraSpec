@@ -29,5 +29,35 @@ in  Plan.make Spec.targetBackend
           , Spec.interface "eth0" (Spec.InterfaceState.HasSpeed 1000)
           , Spec.interface "eth0" (Spec.InterfaceState.HasIpv4Address "10.0.1.10")
           , Spec.kernelModule "br_netfilter" Spec.KernelModuleState.Loaded
+          , Spec.bond "bond0" Spec.BondState.Exist
+          , Spec.bond "bond0" (Spec.BondState.HasInterface "eth0")
+          , Spec.bridge "br0" Spec.BridgeState.Exist
+          , Spec.bridge "br0" (Spec.BridgeState.HasInterface "eth1")
+          , Spec.defaultGateway (Spec.DefaultGatewayState.HasIpaddress "10.0.1.1")
+          , Spec.defaultGateway (Spec.DefaultGatewayState.HasInterface "eth0")
+          , Spec.host "example.jp" Spec.HostState.Resolvable
+          , Spec.host "example.jp" Spec.HostState.Reachable
+          , Spec.host "example.jp" (Spec.HostState.HasIpaddress "192.0.2.1")
+          , Spec.iptables "filter" (Spec.IptablesState.HasRule "-P INPUT ACCEPT")
+          , Spec.ip6tables "filter" (Spec.Ip6tablesState.HasRule "-P INPUT DROP")
+          , Spec.ipfilter "block" (Spec.IpfilterState.HasRule "block in all")
+          , Spec.ipnat "rdr" (Spec.IpnatState.HasRule "rdr en0 0/0 port 80 -> 127.0.0.1 port 8080")
+          , Spec.routingTable
+              ( Spec.RoutingTableState.HasEntry
+                  { destination = "192.168.100.0/24"
+                  , gateway     = "192.168.100.1"
+                  }
+              )
+          , Spec.selinux Spec.SelinuxState.Enforcing
+          , Spec.selinuxModule "virt" Spec.SelinuxModuleState.Installed
+          , Spec.selinuxModule "virt" Spec.SelinuxModuleState.Enabled
+          , Spec.linuxAuditSystem Spec.LinuxAuditSystemState.Running
+          , Spec.linuxAuditSystem Spec.LinuxAuditSystemState.Enabled
+          , Spec.linuxKernelParameter "net.ipv4.ip_forward"
+              (Spec.LinuxKernelParameterState.HasValue "1")
+          , Spec.cgroup "group1"
+              ( Spec.CgroupState.HasParameter
+                  { name = "cpu.shares", value = "256" }
+              )
           ]
       ]

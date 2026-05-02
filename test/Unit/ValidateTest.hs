@@ -22,6 +22,8 @@ tests = testGroup "defense-in-depth"
   , testCase "layer 3: rejects backend mismatch"    layer3BackendMismatch
   , testCase "layer 3: rejects port.protocol wrong type" layer3WrongProtocolType
   , testCase "layer 3: rejects unknown port attr"   layer3UnknownPortAttr
+  , testCase "layer 3: rejects wildcard kind non-Text value" layer3WildcardWrongType
+  , testCase "layer 3: rejects routing_table conflicting gateway" layer3RoutingTableConflict
   ]
 
 assertLeftContains :: Text -> Either Text a -> IO ()
@@ -90,3 +92,22 @@ layer3UnknownPortAttr =
   let bad = Assertion "port" "80" (Map.fromList [("tcp_only", AVBool True)])
       ep  = ExecutionPlan "serverspec" [Job (mkNode "h") [bad]]
   in assertLeftContains "unknown attrs key for kind port" (emitFor ep)
+
+-- Wildcard kinds (e.g. routing_table) require AVText values for every attr key.
+layer3WildcardWrongType :: IO ()
+layer3WildcardWrongType =
+  let bad = Assertion "routing_table" "routing_table"
+              (Map.fromList [("10.0.0.0/8", AVNat 1)])
+      ep  = ExecutionPlan "serverspec" [Job (mkNode "h") [bad]]
+  in assertLeftContains "wildcard kind" (emitFor ep)
+
+-- Two routing_table entries sharing the same destination but disagreeing on
+-- the gateway must be rejected by the layer-3 conflict fail-safe.
+layer3RoutingTableConflict :: IO ()
+layer3RoutingTableConflict =
+  let a = Assertion "routing_table" "routing_table"
+            (Map.fromList [("10.0.0.0/8", AVText "10.0.0.1")])
+      b = Assertion "routing_table" "routing_table"
+            (Map.fromList [("10.0.0.0/8", AVText "10.0.0.2")])
+      ep = ExecutionPlan "serverspec" [Job (mkNode "h") [a, b]]
+  in assertLeftContains "conflicting attribute" (emitFor ep)

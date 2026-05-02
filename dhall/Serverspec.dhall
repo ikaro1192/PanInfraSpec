@@ -70,6 +70,37 @@ let InterfaceState =
       >
 let KernelModuleState = < Loaded >
 
+-- PR-1 network resources -----------------------------------------------------
+
+let BondState   = < Exist | HasInterface : Text >
+let BridgeState = < Exist | HasInterface : Text >
+let DefaultGatewayState =
+      < HasIpaddress : Text
+      | HasInterface : Text
+      >
+let HostState =
+      < Resolvable
+      | Reachable
+      | HasIpaddress : Text
+      >
+let Ip6tablesState = < HasRule : Text >
+let IpfilterState  = < HasRule : Text >
+let IpnatState     = < HasRule : Text >
+let IptablesState  = < HasRule : Text >
+let RoutingTableState =
+      < HasEntry : { destination : Text, gateway : Text } >
+
+-- PR-2 Linux system / kernel resources --------------------------------------
+
+let SelinuxState = < Enforcing | Permissive | Disabled >
+let SelinuxModuleState = < Enabled | Installed >
+let LinuxAuditSystemState = < Running | Enabled >
+let LinuxKernelParameterState = < HasValue : Text >
+let CgroupState =
+      < HasParameter : { name : Text, value : Text } >
+
+
+
 -- Attribute encoders --------------------------------------------------------
 
 let serviceStateAttrs =
@@ -163,6 +194,124 @@ let interfaceStateAttrs =
 let kernelModuleStateAttrs =
       \(_ : KernelModuleState) -> toMap { loaded = AttrValue.AVBool True }
 
+let bondStateAttrs =
+      \(s : BondState) ->
+        merge
+          { Exist        = toMap { exist = AttrValue.AVBool True }
+          , HasInterface = \(i : Text) -> toMap { interface = AttrValue.AVText i }
+          }
+          s
+
+let bridgeStateAttrs =
+      \(s : BridgeState) ->
+        merge
+          { Exist        = toMap { exist = AttrValue.AVBool True }
+          , HasInterface = \(i : Text) -> toMap { interface = AttrValue.AVText i }
+          }
+          s
+
+let defaultGatewayStateAttrs =
+      \(s : DefaultGatewayState) ->
+        merge
+          { HasIpaddress = \(a : Text) -> toMap { ipaddress = AttrValue.AVText a }
+          , HasInterface = \(i : Text) -> toMap { interface = AttrValue.AVText i }
+          }
+          s
+
+let hostStateAttrs =
+      \(s : HostState) ->
+        merge
+          { Resolvable   = toMap { resolvable = AttrValue.AVBool True }
+          , Reachable    = toMap { reachable  = AttrValue.AVBool True }
+          , HasIpaddress = \(a : Text) -> toMap { ipaddress = AttrValue.AVText a }
+          }
+          s
+
+let ip6tablesStateAttrs =
+      \(s : Ip6tablesState) ->
+        merge
+          { HasRule = \(r : Text) -> toMap { rule = AttrValue.AVText r } }
+          s
+
+let ipfilterStateAttrs =
+      \(s : IpfilterState) ->
+        merge
+          { HasRule = \(r : Text) -> toMap { rule = AttrValue.AVText r } }
+          s
+
+let ipnatStateAttrs =
+      \(s : IpnatState) ->
+        merge
+          { HasRule = \(r : Text) -> toMap { rule = AttrValue.AVText r } }
+          s
+
+let iptablesStateAttrs =
+      \(s : IptablesState) ->
+        merge
+          { HasRule = \(r : Text) -> toMap { rule = AttrValue.AVText r } }
+          s
+
+-- routing_table is a wildcard kind: each HasEntry produces one (destination,
+-- gateway) attribute pair, where the destination becomes the dynamic mapKey.
+-- toMap cannot be used here because the field name is value-dependent.
+let routingTableStateAttrs =
+      \(s : RoutingTableState) ->
+        merge
+          { HasEntry =
+              \(e : { destination : Text, gateway : Text }) ->
+                [ { mapKey = e.destination
+                  , mapValue = AttrValue.AVText e.gateway
+                  }
+                ]
+          }
+          s
+
+let selinuxStateAttrs =
+      \(s : SelinuxState) ->
+        merge
+          { Enforcing  = toMap { enforcing  = AttrValue.AVBool True }
+          , Permissive = toMap { permissive = AttrValue.AVBool True }
+          , Disabled   = toMap { disabled   = AttrValue.AVBool True }
+          }
+          s
+
+let selinuxModuleStateAttrs =
+      \(s : SelinuxModuleState) ->
+        merge
+          { Enabled   = toMap { enabled   = AttrValue.AVBool True }
+          , Installed = toMap { installed = AttrValue.AVBool True }
+          }
+          s
+
+let linuxAuditSystemStateAttrs =
+      \(s : LinuxAuditSystemState) ->
+        merge
+          { Running = toMap { running = AttrValue.AVBool True }
+          , Enabled = toMap { enabled = AttrValue.AVBool True }
+          }
+          s
+
+let linuxKernelParameterStateAttrs =
+      \(s : LinuxKernelParameterState) ->
+        merge
+          { HasValue = \(v : Text) -> toMap { value = AttrValue.AVText v } }
+          s
+
+-- cgroup is a wildcard kind: HasParameter projects to a single attribute pair
+-- whose mapKey is the parameter name (e.g. "cpu.shares"). toMap cannot be
+-- used because the field name is value-dependent.
+let cgroupStateAttrs =
+      \(s : CgroupState) ->
+        merge
+          { HasParameter =
+              \(p : { name : Text, value : Text }) ->
+                [ { mapKey = p.name
+                  , mapValue = AttrValue.AVText p.value
+                  }
+                ]
+          }
+          s
+
 -- Smart constructors --------------------------------------------------------
 
 let service
@@ -231,6 +380,112 @@ let kernelModule
       \(s : KernelModuleState) ->
         { kind = "kernel-module", primaryKey = name, attrs = kernelModuleStateAttrs s }
 
+let bond
+    : Text -> BondState -> Assertion
+    = \(name : Text) ->
+      \(s : BondState) ->
+        { kind = "bond", primaryKey = name, attrs = bondStateAttrs s }
+
+let bridge
+    : Text -> BridgeState -> Assertion
+    = \(name : Text) ->
+      \(s : BridgeState) ->
+        { kind = "bridge", primaryKey = name, attrs = bridgeStateAttrs s }
+
+-- defaultGateway is a singleton: takes no Text argument; primaryKey is fixed
+-- to the kind name to satisfy non-empty validation. The emitter omits the
+-- (<primaryKey>) argument from the generated `describe` block.
+let defaultGateway
+    : DefaultGatewayState -> Assertion
+    = \(s : DefaultGatewayState) ->
+        { kind = "default_gateway"
+        , primaryKey = "default_gateway"
+        , attrs = defaultGatewayStateAttrs s
+        }
+
+let host
+    : Text -> HostState -> Assertion
+    = \(name : Text) ->
+      \(s : HostState) ->
+        { kind = "host", primaryKey = name, attrs = hostStateAttrs s }
+
+let ip6tables
+    : Text -> Ip6tablesState -> Assertion
+    = \(table : Text) ->
+      \(s : Ip6tablesState) ->
+        { kind = "ip6tables", primaryKey = table, attrs = ip6tablesStateAttrs s }
+
+let ipfilter
+    : Text -> IpfilterState -> Assertion
+    = \(label : Text) ->
+      \(s : IpfilterState) ->
+        { kind = "ipfilter", primaryKey = label, attrs = ipfilterStateAttrs s }
+
+let ipnat
+    : Text -> IpnatState -> Assertion
+    = \(label : Text) ->
+      \(s : IpnatState) ->
+        { kind = "ipnat", primaryKey = label, attrs = ipnatStateAttrs s }
+
+let iptables
+    : Text -> IptablesState -> Assertion
+    = \(table : Text) ->
+      \(s : IptablesState) ->
+        { kind = "iptables", primaryKey = table, attrs = iptablesStateAttrs s }
+
+-- routingTable is a singleton (no primary key); each HasEntry attaches one
+-- destination/gateway pair to the same describe block.
+let routingTable
+    : RoutingTableState -> Assertion
+    = \(s : RoutingTableState) ->
+        { kind = "routing_table"
+        , primaryKey = "routing_table"
+        , attrs = routingTableStateAttrs s
+        }
+
+-- selinux is a singleton; the three states are mutually exclusive in practice
+-- but the validator does not enforce mutual exclusion (a misuse manifests as
+-- a Ruby-level test failure).
+let selinux
+    : SelinuxState -> Assertion
+    = \(s : SelinuxState) ->
+        { kind = "selinux"
+        , primaryKey = "selinux"
+        , attrs = selinuxStateAttrs s
+        }
+
+let selinuxModule
+    : Text -> SelinuxModuleState -> Assertion
+    = \(name : Text) ->
+      \(s : SelinuxModuleState) ->
+        { kind = "selinux_module"
+        , primaryKey = name
+        , attrs = selinuxModuleStateAttrs s
+        }
+
+let linuxAuditSystem
+    : LinuxAuditSystemState -> Assertion
+    = \(s : LinuxAuditSystemState) ->
+        { kind = "linux_audit_system"
+        , primaryKey = "linux_audit_system"
+        , attrs = linuxAuditSystemStateAttrs s
+        }
+
+let linuxKernelParameter
+    : Text -> LinuxKernelParameterState -> Assertion
+    = \(name : Text) ->
+      \(s : LinuxKernelParameterState) ->
+        { kind = "linux_kernel_parameter"
+        , primaryKey = name
+        , attrs = linuxKernelParameterStateAttrs s
+        }
+
+let cgroup
+    : Text -> CgroupState -> Assertion
+    = \(name : Text) ->
+      \(s : CgroupState) ->
+        { kind = "cgroup", primaryKey = name, attrs = cgroupStateAttrs s }
+
 in  { AttrValue         = AttrValue
     , AttrLeaf          = AttrLeaf
     , CompareOp         = CompareOp
@@ -246,6 +501,20 @@ in  { AttrValue         = AttrValue
     , MountState        = MountState
     , InterfaceState    = InterfaceState
     , KernelModuleState = KernelModuleState
+    , BondState           = BondState
+    , BridgeState         = BridgeState
+    , DefaultGatewayState = DefaultGatewayState
+    , HostState           = HostState
+    , Ip6tablesState      = Ip6tablesState
+    , IpfilterState       = IpfilterState
+    , IpnatState          = IpnatState
+    , IptablesState       = IptablesState
+    , RoutingTableState   = RoutingTableState
+    , SelinuxState              = SelinuxState
+    , SelinuxModuleState        = SelinuxModuleState
+    , LinuxAuditSystemState     = LinuxAuditSystemState
+    , LinuxKernelParameterState = LinuxKernelParameterState
+    , CgroupState               = CgroupState
     , service           = service
     , package           = package
     , port              = port
@@ -257,5 +526,19 @@ in  { AttrValue         = AttrValue
     , mount             = mount
     , interface         = interface
     , kernelModule      = kernelModule
+    , bond              = bond
+    , bridge            = bridge
+    , defaultGateway    = defaultGateway
+    , host              = host
+    , ip6tables         = ip6tables
+    , ipfilter          = ipfilter
+    , ipnat             = ipnat
+    , iptables          = iptables
+    , routingTable      = routingTable
+    , selinux               = selinux
+    , selinuxModule         = selinuxModule
+    , linuxAuditSystem      = linuxAuditSystem
+    , linuxKernelParameter  = linuxKernelParameter
+    , cgroup                = cgroup
     , targetBackend     = "serverspec"
     }

@@ -175,6 +175,20 @@ matching `*State` union.
 | Mount | `mount : Text -> MountState -> Assertion` | `Mounted`, `OnDevice : Text`, `OfFstype : Text` |
 | Interface | `interface : Text -> InterfaceState -> Assertion` | `Exist`, `HasSpeed : Natural`, `HasIpv4Address : Text` |
 | Kernel module | `kernelModule : Text -> KernelModuleState -> Assertion` | `Loaded` |
+| Bond | `bond : Text -> BondState -> Assertion` | `Exist`, `HasInterface : Text` |
+| Bridge | `bridge : Text -> BridgeState -> Assertion` | `Exist`, `HasInterface : Text` |
+| Default gateway (singleton) | `defaultGateway : DefaultGatewayState -> Assertion` | `HasIpaddress : Text`, `HasInterface : Text` |
+| Host | `host : Text -> HostState -> Assertion` | `Resolvable`, `Reachable`, `HasIpaddress : Text` |
+| iptables | `iptables : Text -> IptablesState -> Assertion` | `HasRule : Text` |
+| ip6tables | `ip6tables : Text -> Ip6tablesState -> Assertion` | `HasRule : Text` |
+| ipfilter | `ipfilter : Text -> IpfilterState -> Assertion` | `HasRule : Text` |
+| ipnat | `ipnat : Text -> IpnatState -> Assertion` | `HasRule : Text` |
+| Routing table (singleton) | `routingTable : RoutingTableState -> Assertion` | `HasEntry : { destination : Text, gateway : Text }` |
+| SELinux (singleton) | `selinux : SelinuxState -> Assertion` | `Enforcing`, `Permissive`, `Disabled` |
+| SELinux module | `selinuxModule : Text -> SelinuxModuleState -> Assertion` | `Enabled`, `Installed` |
+| Linux audit system (singleton) | `linuxAuditSystem : LinuxAuditSystemState -> Assertion` | `Running`, `Enabled` |
+| Linux kernel parameter | `linuxKernelParameter : Text -> LinuxKernelParameterState -> Assertion` | `HasValue : Text` |
+| Cgroup | `cgroup : Text -> CgroupState -> Assertion` | `HasParameter : { name : Text, value : Text }` |
 
 To express more than one state for the same resource (e.g. nginx must be both
 running and enabled), write two assertions with the same primary key — they
