@@ -27,17 +27,62 @@ describe default_gateway do
   its(:ipaddress) { should eq '10.0.1.1' }
 end
 
+describe file('/etc/hosts') do
+  it { should be_file }
+end
+
+describe file('/etc/localtime') do
+  it { should be_linked_to '/usr/share/zoneinfo/UTC' }
+end
+
+describe file('/etc/nginx') do
+  it { should be_directory }
+end
+
 describe file('/etc/nginx/nginx.conf') do
   it { should exist }
+end
+
+describe file('/etc/passwd') do
+  it { should be_readable }
+  it { should be_immutable }
 end
 
 describe file('/etc/profile') do
   it { should contain 'PATH' }
 end
 
+describe file('/etc/resolv.conf') do
+  it { should contain('nameserver').from('# DNS').to('# end') }
+end
+
+describe file('/etc/shadow') do
+  it { should be_readable.by_user('root') }
+end
+
+describe file('/etc/sudoers') do
+  it { should be_writable.by(:owned) }
+end
+
+describe file('/proc') do
+  it { should be_mounted.with(:type => 'proc') }
+end
+
+describe file('/usr/local/bin/foo') do
+  it { should be_executable.by(:others) }
+end
+
 describe file('/var/log/nginx') do
   it { should be_mode 644 }
   it { should be_owned_by 'nginx' }
+end
+
+describe file('/var/log/syslog') do
+  it { should contain('ERROR').after('2026-01-01') }
+end
+
+describe file('/var/run/docker.sock') do
+  it { should be_socket }
 end
 
 describe group('nginx') do
@@ -54,7 +99,9 @@ end
 describe interface('eth0') do
   it { should exist }
   it { should have_ipv4_address '10.0.1.10' }
+  it { should have_ipv6_address 'fe80::1' }
   its(:speed) { should eq 1000 }
+  it { should be_up }
 end
 
 describe ip6tables('filter') do
@@ -101,6 +148,9 @@ describe port(80) do
 end
 
 describe process('nginx') do
+  its(:args) { should eq '-c /etc/nginx/nginx.conf' }
+  its(:count) { should eq 4 }
+  its(:group) { should eq 'nginx' }
   it { should be_running }
   its(:user) { should eq 'nginx' }
 end
@@ -124,8 +174,13 @@ describe service('nginx') do
   it { should be_running }
 end
 
+describe user('deploy') do
+  it { should have_authorized_key 'ssh-rsa AAAA...' }
+end
+
 describe user('nginx') do
   it { should belong_to_group 'nginx' }
+  it { should belong_to_primary_group 'nginx' }
   it { should exist }
   it { should have_home_directory '/var/lib/nginx' }
   it { should have_login_shell '/usr/sbin/nologin' }

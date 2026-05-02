@@ -93,5 +93,45 @@ in  Plan.make Spec.targetBackend
               ( Spec.WindowsRegistryKeyState.HasPropertyValue
                   { name = "NumProperty", propertyType = "type_dword", value = 1 }
               )
+          -- Phase 2 follow-up: file simple type matchers
+          , Spec.file "/etc/hosts"           Spec.FileState.BeFile
+          , Spec.file "/etc/nginx"           Spec.FileState.BeDirectory
+          , Spec.file "/var/run/docker.sock" Spec.FileState.BeSocket
+          , Spec.file "/etc/passwd"          Spec.FileState.BeImmutable
+          -- Phase 2 follow-up: file permission chain matchers
+          , Spec.file "/etc/passwd" Spec.FileState.Readable
+          , Spec.file "/etc/shadow" (Spec.FileState.ReadableByUser "root")
+          , Spec.file "/usr/local/bin/foo"
+              (Spec.FileState.ExecutableByScope Spec.PermissionScope.Others)
+          , Spec.file "/etc/sudoers"
+              (Spec.FileState.WritableByScope Spec.PermissionScope.Owner)
+          -- Phase 2 follow-up: file contain chain matchers
+          , Spec.file "/etc/resolv.conf"
+              ( Spec.FileState.ContainsFromTo
+                  { pattern = "nameserver", from = "# DNS", to = "# end" }
+              )
+          , Spec.file "/var/log/syslog"
+              ( Spec.FileState.ContainsAfter
+                  { pattern = "ERROR", after = "2026-01-01" }
+              )
+          -- Phase 2 follow-up: file link / mounted matchers
+          , Spec.file "/etc/localtime"
+              (Spec.FileState.LinkedTo "/usr/share/zoneinfo/UTC")
+          , Spec.file "/proc"
+              ( Spec.FileState.MountedWith
+                  [ { mapKey = "type", mapValue = "proc" } ]
+              )
+          -- Phase 2 follow-up: user
+          , Spec.user "nginx" (Spec.UserState.BelongsToPrimaryGroup "nginx")
+          , Spec.user "deploy"
+              (Spec.UserState.HasAuthorizedKey "ssh-rsa AAAA...")
+          -- Phase 2 follow-up: interface
+          , Spec.interface "eth0" Spec.InterfaceState.Up
+          , Spec.interface "eth0" (Spec.InterfaceState.HasIpv6Address "fe80::1")
+          -- Phase 2 follow-up: process
+          , Spec.process "nginx" (Spec.ProcessState.HasGroup "nginx")
+          , Spec.process "nginx"
+              (Spec.ProcessState.HasArgs "-c /etc/nginx/nginx.conf")
+          , Spec.process "nginx" (Spec.ProcessState.HasCount 4)
           ]
       ]
