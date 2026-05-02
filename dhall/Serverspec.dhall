@@ -82,24 +82,39 @@ let HostState =
       < Resolvable
       | Reachable
       | HasIpaddress : Text
+      | ReachableWith : { port : Natural, proto : Text, timeout : Natural }
       >
 let Ip6tablesState = < HasRule : Text >
 let IpfilterState  = < HasRule : Text >
 let IpnatState     = < HasRule : Text >
 let IptablesState  = < HasRule : Text >
 let RoutingTableState =
-      < HasEntry : { destination : Text, gateway : Text } >
+      < HasEntry     : { destination : Text, gateway : Text }
+      | HasEntryFull : { destination : Text, gateway : Text, interface : Text }
+      >
 
 -- PR-2 Linux system / kernel resources --------------------------------------
 
 let SelinuxState = < Enforcing | Permissive | Disabled >
-let SelinuxModuleState = < Enabled | Installed >
+let SelinuxModuleState = < Enabled | Installed | WithVersion : Text >
 let LinuxAuditSystemState = < Running | Enabled >
 let LinuxKernelParameterState = < HasValue : Text >
 let CgroupState =
       < HasParameter : { name : Text, value : Text } >
 
+-- Issue #3 follow-up: compound matchers --------------------------------------
 
+let WindowsFeatureState = < Installed | InstalledBy : Text >
+let CronState =
+      < HasEntry       : Text
+      | HasEntryAsUser : { entry : Text, user : Text }
+      >
+let X509CertificateState =
+      < ValidityInDaysCompare : { op : CompareOp, value : Natural } >
+let WindowsRegistryKeyState =
+      < HasProperty      : { name : Text, propertyType : Text }
+      | HasPropertyValue : { name : Text, propertyType : Text, value : Natural }
+      >
 
 -- Attribute encoders --------------------------------------------------------
 
@@ -224,6 +239,17 @@ let hostStateAttrs =
           { Resolvable   = toMap { resolvable = AttrValue.AVBool True }
           , Reachable    = toMap { reachable  = AttrValue.AVBool True }
           , HasIpaddress = \(a : Text) -> toMap { ipaddress = AttrValue.AVText a }
+          , ReachableWith =
+              \(r : { port : Natural, proto : Text, timeout : Natural }) ->
+                toMap
+                  { reachable      = AttrValue.AVBool True
+                  , reachable_with =
+                      AttrValue.AVRecord
+                        [ { mapKey = "port",    mapValue = AttrLeaf.ALNat  r.port }
+                        , { mapKey = "proto",   mapValue = AttrLeaf.ALText r.proto }
+                        , { mapKey = "timeout", mapValue = AttrLeaf.ALNat  r.timeout }
+                        ]
+                  }
           }
           s
 
@@ -263,6 +289,17 @@ let routingTableStateAttrs =
                   , mapValue = AttrValue.AVText e.gateway
                   }
                 ]
+          , HasEntryFull =
+              \(e : { destination : Text, gateway : Text, interface : Text }) ->
+                [ { mapKey = e.destination
+                  , mapValue =
+                      AttrValue.AVRecord
+                        [ { mapKey = "destination", mapValue = AttrLeaf.ALText e.destination }
+                        , { mapKey = "gateway",     mapValue = AttrLeaf.ALText e.gateway }
+                        , { mapKey = "interface",   mapValue = AttrLeaf.ALText e.interface }
+                        ]
+                  }
+                ]
           }
           s
 
@@ -278,8 +315,14 @@ let selinuxStateAttrs =
 let selinuxModuleStateAttrs =
       \(s : SelinuxModuleState) ->
         merge
-          { Enabled   = toMap { enabled   = AttrValue.AVBool True }
-          , Installed = toMap { installed = AttrValue.AVBool True }
+          { Enabled     = toMap { enabled   = AttrValue.AVBool True }
+          , Installed   = toMap { installed = AttrValue.AVBool True }
+          , WithVersion =
+              \(v : Text) ->
+                toMap
+                  { installed = AttrValue.AVBool True
+                  , version   = AttrValue.AVText v
+                  }
           }
           s
 
@@ -309,6 +352,70 @@ let cgroupStateAttrs =
                   , mapValue = AttrValue.AVText p.value
                   }
                 ]
+          }
+          s
+
+let windowsFeatureStateAttrs =
+      \(s : WindowsFeatureState) ->
+        merge
+          { Installed   = toMap { installed = AttrValue.AVBool True }
+          , InstalledBy =
+              \(m : Text) ->
+                toMap
+                  { installed      = AttrValue.AVBool True
+                  , install_method = AttrValue.AVText m
+                  }
+          }
+          s
+
+let cronStateAttrs =
+      \(s : CronState) ->
+        merge
+          { HasEntry = \(e : Text) -> toMap { entry = AttrValue.AVText e }
+          , HasEntryAsUser =
+              \(p : { entry : Text, user : Text }) ->
+                toMap
+                  { entry      = AttrValue.AVText p.entry
+                  , entry_user = AttrValue.AVText p.user
+                  }
+          }
+          s
+
+let x509CertificateStateAttrs =
+      \(s : X509CertificateState) ->
+        merge
+          { ValidityInDaysCompare =
+              \(c : { op : CompareOp, value : Natural }) ->
+                toMap
+                  { validity_in_days =
+                      AttrValue.AVCompare
+                        { op = c.op, value = AttrLeaf.ALNat c.value }
+                  }
+          }
+          s
+
+let windowsRegistryKeyStateAttrs =
+      \(s : WindowsRegistryKeyState) ->
+        merge
+          { HasProperty =
+              \(p : { name : Text, propertyType : Text }) ->
+                toMap
+                  { property_args =
+                      AttrValue.AVList
+                        [ AttrLeaf.ALText   p.name
+                        , AttrLeaf.ALSymbol p.propertyType
+                        ]
+                  }
+          , HasPropertyValue =
+              \(p : { name : Text, propertyType : Text, value : Natural }) ->
+                toMap
+                  { property_value_args =
+                      AttrValue.AVList
+                        [ AttrLeaf.ALText   p.name
+                        , AttrLeaf.ALSymbol p.propertyType
+                        , AttrLeaf.ALNat    p.value
+                        ]
+                  }
           }
           s
 
@@ -486,6 +593,42 @@ let cgroup
       \(s : CgroupState) ->
         { kind = "cgroup", primaryKey = name, attrs = cgroupStateAttrs s }
 
+let windowsFeature
+    : Text -> WindowsFeatureState -> Assertion
+    = \(name : Text) ->
+      \(s : WindowsFeatureState) ->
+        { kind = "windows_feature"
+        , primaryKey = name
+        , attrs = windowsFeatureStateAttrs s
+        }
+
+-- cron is a singleton: there is only one cron table per host.
+let cron
+    : CronState -> Assertion
+    = \(s : CronState) ->
+        { kind = "cron"
+        , primaryKey = "cron"
+        , attrs = cronStateAttrs s
+        }
+
+let x509Certificate
+    : Text -> X509CertificateState -> Assertion
+    = \(path : Text) ->
+      \(s : X509CertificateState) ->
+        { kind = "x509_certificate"
+        , primaryKey = path
+        , attrs = x509CertificateStateAttrs s
+        }
+
+let windowsRegistryKey
+    : Text -> WindowsRegistryKeyState -> Assertion
+    = \(path : Text) ->
+      \(s : WindowsRegistryKeyState) ->
+        { kind = "windows_registry_key"
+        , primaryKey = path
+        , attrs = windowsRegistryKeyStateAttrs s
+        }
+
 in  { AttrValue         = AttrValue
     , AttrLeaf          = AttrLeaf
     , CompareOp         = CompareOp
@@ -515,6 +658,10 @@ in  { AttrValue         = AttrValue
     , LinuxAuditSystemState     = LinuxAuditSystemState
     , LinuxKernelParameterState = LinuxKernelParameterState
     , CgroupState               = CgroupState
+    , WindowsFeatureState       = WindowsFeatureState
+    , CronState                 = CronState
+    , X509CertificateState      = X509CertificateState
+    , WindowsRegistryKeyState   = WindowsRegistryKeyState
     , service           = service
     , package           = package
     , port              = port
@@ -540,5 +687,9 @@ in  { AttrValue         = AttrValue
     , linuxAuditSystem      = linuxAuditSystem
     , linuxKernelParameter  = linuxKernelParameter
     , cgroup                = cgroup
+    , windowsFeature        = windowsFeature
+    , cron                  = cron
+    , x509Certificate       = x509Certificate
+    , windowsRegistryKey    = windowsRegistryKey
     , targetBackend     = "serverspec"
     }

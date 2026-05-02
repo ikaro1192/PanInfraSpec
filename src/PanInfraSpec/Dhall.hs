@@ -40,6 +40,8 @@ backendAllowedKinds = \case
     , "ip6tables", "ipfilter", "ipnat", "iptables", "routing_table"
     , "selinux", "selinux_module", "linux_audit_system"
     , "linux_kernel_parameter", "cgroup"
+    , "windows_feature", "windows_registry_key"
+    , "x509_certificate", "cron"
     ]
   _            -> []
 
