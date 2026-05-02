@@ -152,6 +152,47 @@ serverspecSchema = Map.fromList
   , ("linux_kernel_parameter", Map.fromList
       [ ("value", ATText) ])
   , ("cgroup", Map.empty)  -- wildcard kind: dynamic parameter names
+  -- Phase 3: serverspec.org coverage completion
+  , ("lxc", Map.fromList
+      [ ("exist", ATBool), ("running", ATBool) ])
+  , ("mail_alias", Map.fromList
+      [ ("aliased_to", ATText) ])
+  , ("ppa", Map.fromList
+      [ ("exist", ATBool), ("enabled", ATBool) ])
+  , ("yumrepo", Map.fromList
+      [ ("exist", ATBool), ("enabled", ATBool) ])
+  , ("iis_app_pool", Map.fromList
+      [ ("exist", ATBool), ("dotnet_version", ATText) ])
+  , ("iis_website", Map.fromList
+      [ ("exist",         ATBool)
+      , ("enabled",       ATBool)
+      , ("running",       ATBool)
+      , ("in_app_pool",   ATText)
+      , ("physical_path", ATText)
+      ])
+  , ("mysql_config", Map.fromList
+      [ ("value", ATCompare) ])
+  , ("php_config", Map.fromList
+      [ ("value", ATCompare)
+      , ("_ini",  ATText)  -- header injection sentinel; consumed by formatGroup
+      ])
+  , ("x509_private_key", Map.fromList
+      [ ("encrypted",            ATBool)
+      , ("not_encrypted",        ATBool)
+      , ("valid",                ATBool)
+      , ("matching_certificate", ATText)
+      ])
+  , ("zfs", Map.fromList
+      [ ("exist",    ATBool)
+      , ("property", ATRecord)
+      ])
+  , ("docker_container", Map.fromList
+      [ ("exist",   ATBool)
+      , ("running", ATBool)
+      , ("volume",  ATList)
+      ])
+  , ("docker_image", Map.fromList
+      [ ("exist", ATBool) ])
   ]
 
 -- | Kinds whose @describe@ block takes no primary-key argument
@@ -174,6 +215,18 @@ wildcardValueTags :: Map Text [AttrTag]
 wildcardValueTags = Map.fromList
   [ ("routing_table", [ATText, ATRecord])
   , ("cgroup",        [ATText])
+  ]
+
+-- | Mixed-wildcard kinds: their schema lists known attr keys with fixed types,
+-- but unknown keys are accepted as wildcard values matching the listed
+-- 'AttrTag's. The Docker resources use this so @inspect:<keypath>@ /
+-- @inspect_include:<keypath>@ / @inspection_not_include:<key>@ attribute keys
+-- (whose suffix varies per inspection target) can flow through validation
+-- without enumerating every possible Docker JSON path in the schema.
+mixedWildcardKinds :: Map Text [AttrTag]
+mixedWildcardKinds = Map.fromList
+  [ ("docker_container", [ATText, ATNat, ATBool, ATSymbol])
+  , ("docker_image",     [ATText, ATNat, ATBool, ATSymbol])
   ]
 
 tagOf :: AttrValue -> AttrTag
@@ -225,14 +278,20 @@ validateAssertion a@(Assertion k pk attrs) = do
              Left $ "wildcard kind " <> k <> " accepts "
                  <> T.intercalate "/" (map showTag allowed)
                  <> "; got " <> showTag actual <> " for key " <> key
-      else do
-        expected <- case Map.lookup key kindSchema of
-          Just t  -> Right t
+      else case Map.lookup key kindSchema of
+        Just expected -> do
+          let actual = tagOf val
+          unless (actual == expected) $
+            Left $ "wrong attr type for " <> k <> "." <> key
+                <> ": expected " <> showTag expected <> ", got " <> showTag actual
+        Nothing -> case Map.lookup k mixedWildcardKinds of
+          Just allowed ->
+            let actual = tagOf val
+            in unless (actual `elem` allowed) $
+                 Left $ "mixed-wildcard kind " <> k <> " accepts "
+                     <> T.intercalate "/" (map showTag allowed)
+                     <> "; got " <> showTag actual <> " for key " <> key
           Nothing -> Left ("unknown attrs key for kind " <> k <> ": " <> key)
-        let actual = tagOf val
-        unless (actual == expected) $
-          Left $ "wrong attr type for " <> k <> "." <> key
-              <> ": expected " <> showTag expected <> ", got " <> showTag actual
   when (k == "port") $
     case TR.decimal pk :: Either String (Natural, Text) of
       Right (_, rest) | T.null rest -> Right ()
@@ -438,6 +497,58 @@ formatItLine "windows_registry_key" "property_args" (AVList xs) =
   "it { should have_property " <> renderArgList xs <> " }"
 formatItLine "windows_registry_key" "property_value_args" (AVList xs) =
   "it { should have_property_value " <> renderArgList xs <> " }"
+-- Phase 3 (serverspec.org coverage completion) -------------------------------
+-- lxc
+formatItLine "lxc"        "exist"          _          = "it { should exist }"
+formatItLine "lxc"        "running"        _          = "it { should be_running }"
+-- mail_alias
+formatItLine "mail_alias" "aliased_to"     (AVText r) =
+  "it { should be_aliased_to " <> rubyString r <> " }"
+-- ppa
+formatItLine "ppa"        "exist"          _          = "it { should exist }"
+formatItLine "ppa"        "enabled"        _          = "it { should be_enabled }"
+-- yumrepo
+formatItLine "yumrepo"    "exist"          _          = "it { should exist }"
+formatItLine "yumrepo"    "enabled"        _          = "it { should be_enabled }"
+-- iis_app_pool
+formatItLine "iis_app_pool" "exist"          _          = "it { should exist }"
+formatItLine "iis_app_pool" "dotnet_version" (AVText v) =
+  "it { should have_dotnet_version(" <> rubyString v <> ") }"
+-- iis_website
+formatItLine "iis_website" "exist"         _          = "it { should exist }"
+formatItLine "iis_website" "enabled"       _          = "it { should be_enabled }"
+formatItLine "iis_website" "running"       _          = "it { should be_running }"
+formatItLine "iis_website" "in_app_pool"   (AVText p) =
+  "it { should be_in_app_pool(" <> rubyString p <> ") }"
+formatItLine "iis_website" "physical_path" (AVText p) =
+  "it { should have_physical_path(" <> rubyString p <> ") }"
+-- mysql_config / php_config: single value attr; renderAttrs handles the
+-- normal compound flow. The single-key fallback below covers any future
+-- code path that reaches formatItLine directly.
+formatItLine "mysql_config" "value" (AVCompare op leaf) =
+  "its(:value) { should " <> renderCompareRuby op (renderLeafRuby leaf) <> " }"
+formatItLine "php_config"   "value" (AVCompare op leaf) =
+  "its(:value) { should " <> renderCompareRuby op (renderLeafRuby leaf) <> " }"
+-- x509_private_key
+formatItLine "x509_private_key" "encrypted"     _          = "it { should be_encrypted }"
+formatItLine "x509_private_key" "not_encrypted" _          = "it { should_not be_encrypted }"
+formatItLine "x509_private_key" "valid"         _          = "it { should be_valid }"
+formatItLine "x509_private_key" "matching_certificate" (AVText p) =
+  "it { should have_matching_certificate(" <> rubyString p <> ") }"
+-- zfs
+formatItLine "zfs" "exist"    _              = "it { should exist }"
+formatItLine "zfs" "property" (AVRecord kw)  =
+  "it { should have_property " <> renderStringKwargs kw <> " }"
+-- docker_container fixed-schema fallbacks. inspect:* keys are handled in
+-- renderAttrs and never flow through here.
+formatItLine "docker_container" "exist"   _ = "it { should exist }"
+formatItLine "docker_container" "running" _ = "it { should be_running }"
+formatItLine "docker_container" "volume"  (AVList xs) = case xs of
+  [c, h] -> "it { should have_volume(" <> renderLeafRuby c <> ", "
+              <> renderLeafRuby h <> ") }"
+  _      -> "it { should have_volume " <> renderArgList xs <> " }"
+-- docker_image fixed-schema fallback
+formatItLine "docker_image" "exist" _ = "it { should exist }"
 formatItLine k key _ =
   "# UNREACHABLE: unmatched (" <> pretty k <> ", " <> pretty key <> ")"
 
@@ -456,6 +567,7 @@ renderLeafRuby = \case
   ALNat    n -> pretty n
   ALBool   b -> if b then "true" else "false"
   ALSymbol s -> ":" <> pretty s
+  ALRegex  p -> "/" <> pretty p <> "/"
 
 -- | Render a record as @:k => v, :k => v@ (Ruby keyword-arg syntax). Used
 -- by @host.be_reachable.with@, @routing_table.have_entry@, etc.
@@ -463,6 +575,15 @@ renderRecordKwargs :: Map Text AttrLeaf -> Doc ann
 renderRecordKwargs m =
   hsep $ punctuate ","
     [ ":" <> pretty k <+> "=>" <+> renderLeafRuby v
+    | (k, v) <- Map.toAscList m
+    ]
+
+-- | Render a record as @'k' => v, 'k2' => v2@ (Ruby hash literal with string
+-- keys). Used by @zfs.have_property@ and @docker_container.inspection_not_include@.
+renderStringKwargs :: Map Text AttrLeaf -> Doc ann
+renderStringKwargs m =
+  hsep $ punctuate ","
+    [ rubyString k <+> "=>" <+> renderLeafRuby v
     | (k, v) <- Map.toAscList m
     ]
 
@@ -476,11 +597,12 @@ renderArgList xs = hsep $ punctuate "," (map renderLeafRuby xs)
 -- etc., matching idiomatic Serverspec/RSpec.
 renderCompareRuby :: CompareOp -> Doc ann -> Doc ann
 renderCompareRuby op v = case op of
-  OpEq -> "eq" <+> v
-  OpLt -> "be" <+> "<"  <+> v
-  OpLe -> "be" <+> "<=" <+> v
-  OpGt -> "be" <+> ">"  <+> v
-  OpGe -> "be" <+> ">=" <+> v
+  OpEq    -> "eq" <+> v
+  OpLt    -> "be" <+> "<"  <+> v
+  OpLe    -> "be" <+> "<=" <+> v
+  OpGt    -> "be" <+> ">"  <+> v
+  OpGe    -> "be" <+> ">=" <+> v
+  OpMatch -> "match" <+> v
 
 -- | Render the @it { ... }@ lines of a @describe@ block. Indirection over
 -- 'formatItLine' so that compound matchers can fold multiple attribute keys
@@ -577,8 +699,47 @@ renderAttrs "windows_registry_key" attrs =
       _ -> formatItLine "windows_registry_key" key val
   | (key, val) <- Map.toAscList attrs
   ]
+-- Docker resources use prefix-tagged attr keys to encode dynamic inspect
+-- paths (@inspect:Path@, @inspect:HostConfig.NetworkMode@, etc.) without
+-- adding a recursive AttrValue constructor. Strip the prefix here and emit
+-- the corresponding Ruby. Fixed-schema keys (exist/running/volume) flow
+-- through formatItLine.
+renderAttrs "docker_container" attrs =
+  [ renderDockerAttr "docker_container" key val | (key, val) <- Map.toAscList attrs ]
+renderAttrs "docker_image" attrs =
+  [ renderDockerAttr "docker_image" key val | (key, val) <- Map.toAscList attrs ]
 renderAttrs k attrs =
   [ formatItLine k key val | (key, val) <- Map.toAscList attrs ]
+
+-- | Phase 3: Docker prefix-tagged attribute renderer. Recognizes three
+-- semantic prefixes for the inspect-family of matchers; falls back to
+-- 'formatItLine' for fixed-schema keys.
+renderDockerAttr :: Text -> Text -> AttrValue -> Doc ann
+renderDockerAttr k key val
+  | Just keyPath <- T.stripPrefix "inspect:" key =
+      "its([" <> rubyString keyPath <> "]) { should eq "
+        <> renderInspectScalar val <> " }"
+  | Just keyPath <- T.stripPrefix "inspect_include:" key =
+      "its([" <> rubyString keyPath <> "]) { should include "
+        <> renderInspectScalar val <> " }"
+  | Just hashKey <- T.stripPrefix "inspection_not_include:" key =
+      case val of
+        AVText v ->
+          "its(:inspection) { should_not include "
+            <> rubyString hashKey <> " => " <> rubyString v <> " }"
+        _ -> formatItLine k key val
+  | otherwise = formatItLine k key val
+
+-- | Render a scalar 'AttrValue' as the right-hand side of an inspect
+-- matcher. Compound values are not expected here; they would have been
+-- rejected by validation.
+renderInspectScalar :: AttrValue -> Doc ann
+renderInspectScalar = \case
+  AVText   t -> rubyString t
+  AVNat    n -> pretty n
+  AVBool   b -> if b then "true" else "false"
+  AVSymbol s -> ":" <> pretty s
+  v          -> pretty (showVal v)
 
 -- | Phase 2 follow-up: split off the @file@ permission chain for one base
 -- matcher (@readable@/@writable@/@executable@). Returns the chained Ruby
@@ -688,15 +849,27 @@ lookupText k m = case Map.lookup k m of
 
 -- | Render one merged 'Assertion' as a @describe ... do ... end@ block.
 -- Singleton kinds (see 'singletonKinds') drop the @(<primaryKey>)@ argument.
+-- The @php_config@ kind injects an @:ini => '<path>'@ keyword arg into the
+-- header when the @_ini@ sentinel attribute is present (see Dhall
+-- @phpConfigWithIni@).
 formatGroup :: Assertion -> Either Text (Doc ann)
-formatGroup (Assertion k pk attrs) = do
+formatGroup (Assertion k pk attrs0) = do
   let resource = pretty (kindToRubyResource k)
+      (iniArg, attrs)
+        | k == "php_config"
+        , Just (AVText p) <- Map.lookup "_ini" attrs0
+        = (Just p, Map.delete "_ini" attrs0)
+        | otherwise
+        = (Nothing, attrs0)
   header <-
     if Set.member k singletonKinds
       then Right ("describe" <+> resource <+> "do")
       else do
         hd <- primaryDoc k pk
-        Right ("describe" <+> resource <> "(" <> hd <> ")" <+> "do")
+        let args = case iniArg of
+              Nothing -> hd
+              Just p  -> hd <> "," <+> ":ini" <+> "=>" <+> rubyString p
+        Right ("describe" <+> resource <> "(" <> args <> ")" <+> "do")
   let body = vsep (renderAttrs k attrs)
   pure $ vsep [header, indent 2 body, "end"]
 

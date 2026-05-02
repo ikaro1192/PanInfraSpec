@@ -14,16 +14,16 @@ attrValueU :: Text
 attrValueU =
   "< AVText : Text | AVNat : Natural | AVBool : Bool \
   \| AVSymbol : Text \
-  \| AVList : List < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text > \
-  \| AVRecord : List { mapKey : Text, mapValue : < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text > } \
-  \| AVCompare : { op : < Lt | Le | Gt | Ge | Eq >, value : < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text > } \
+  \| AVList : List < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text > \
+  \| AVRecord : List { mapKey : Text, mapValue : < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text > } \
+  \| AVCompare : { op : < Lt | Le | Gt | Ge | Eq | Match >, value : < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text > } \
   \>"
 
 attrLeafU :: Text
-attrLeafU = "< ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text >"
+attrLeafU = "< ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text >"
 
 compareOpU :: Text
-compareOpU = "< Lt | Le | Gt | Ge | Eq >"
+compareOpU = "< Lt | Le | Gt | Ge | Eq | Match >"
 
 tests :: TestTree
 tests = testGroup "Dhall round-trip"

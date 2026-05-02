@@ -67,14 +67,16 @@ renderLeaf = \case
   ALNat    n -> tshow n
   ALBool   b -> if b then "True" else "False"
   ALSymbol s -> ":" <> s
+  ALRegex  p -> "/" <> p <> "/"
 
 renderOp :: CompareOp -> Text
 renderOp = \case
-  OpLt -> "<"
-  OpLe -> "<="
-  OpGt -> ">"
-  OpGe -> ">="
-  OpEq -> "=="
+  OpLt    -> "<"
+  OpLe    -> "<="
+  OpGt    -> ">"
+  OpGe    -> ">="
+  OpEq    -> "=="
+  OpMatch -> "=~"
 
 quoted :: Text -> Text
 quoted t = "\"" <> t <> "\""

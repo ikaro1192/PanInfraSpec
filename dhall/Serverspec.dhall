@@ -3,13 +3,14 @@
 -- Smart constructors enforce Resource × State pairing at the input boundary
 -- (Defense-in-depth layer 1). See specification.md §3.2 / §5.4.
 
-let CompareOp = < Lt | Le | Gt | Ge | Eq >
+let CompareOp = < Lt | Le | Gt | Ge | Eq | Match >
 
 let AttrLeaf =
       < ALText   : Text
       | ALNat    : Natural
       | ALBool   : Bool
       | ALSymbol : Text
+      | ALRegex  : Text
       >
 
 let AttrValue =
@@ -154,6 +155,75 @@ let X509CertificateState =
 let WindowsRegistryKeyState =
       < HasProperty      : { name : Text, propertyType : Text }
       | HasPropertyValue : { name : Text, propertyType : Text, value : Natural }
+      >
+
+-- Phase 3 (serverspec.org coverage completion): 12 remaining kinds -----------
+
+let LxcState  = < Exist | Running >
+
+let MailAliasState = < AliasedTo : Text >
+
+let PpaState     = < Exist | Enabled >
+let YumrepoState = < Exist | Enabled >
+
+let IisAppPoolState =
+      < Exist
+      | HasDotnetVersion : Text
+      >
+
+let IisWebsiteState =
+      < Exist
+      | Enabled
+      | Running
+      | InAppPool       : Text
+      | HasPhysicalPath : Text
+      >
+
+let MysqlConfigState =
+      < EqText  : Text
+      | EqNat   : Natural
+      | Compare : { op : CompareOp, value : Natural }
+      >
+
+let PhpConfigState =
+      < EqText  : Text
+      | EqNat   : Natural
+      | Compare : { op : CompareOp, value : Natural }
+      | Match   : Text
+      >
+
+let X509PrivateKeyState =
+      < Encrypted
+      | NotEncrypted
+      | Valid
+      | HasMatchingCertificate : Text
+      >
+
+let ZfsState =
+      < Exist
+      | HasProperty : List { mapKey : Text, mapValue : Text }
+      >
+
+let DockerContainerState =
+      < Exist
+      | Running
+      | HasVolume       : { containerPath : Text, hostPath : Text }
+      | InspectEqText   : { keyPath : Text, value : Text }
+      | InspectEqNat    : { keyPath : Text, value : Natural }
+      | InspectEqBool   : { keyPath : Text, value : Bool }
+      | InspectEqSymbol : { keyPath : Text, value : Text }
+      | InspectInclude  : { keyPath : Text, value : Text }
+      | InspectionNotInclude : { key : Text, value : Text }
+      >
+
+let DockerImageState =
+      < Exist
+      | InspectEqText   : { keyPath : Text, value : Text }
+      | InspectEqNat    : { keyPath : Text, value : Natural }
+      | InspectEqBool   : { keyPath : Text, value : Bool }
+      | InspectEqSymbol : { keyPath : Text, value : Text }
+      | InspectInclude  : { keyPath : Text, value : Text }
+      | InspectionNotInclude : { key : Text, value : Text }
       >
 
 -- Attribute encoders --------------------------------------------------------
@@ -587,6 +657,248 @@ let windowsRegistryKeyStateAttrs =
           }
           s
 
+-- Phase 3 attribute encoders -------------------------------------------------
+
+let lxcStateAttrs =
+      \(s : LxcState) ->
+        merge
+          { Exist   = toMap { exist   = AttrValue.AVBool True }
+          , Running = toMap { running = AttrValue.AVBool True }
+          }
+          s
+
+let mailAliasStateAttrs =
+      \(s : MailAliasState) ->
+        merge
+          { AliasedTo =
+              \(r : Text) -> toMap { aliased_to = AttrValue.AVText r }
+          }
+          s
+
+let ppaStateAttrs =
+      \(s : PpaState) ->
+        merge
+          { Exist   = toMap { exist   = AttrValue.AVBool True }
+          , Enabled = toMap { enabled = AttrValue.AVBool True }
+          }
+          s
+
+let yumrepoStateAttrs =
+      \(s : YumrepoState) ->
+        merge
+          { Exist   = toMap { exist   = AttrValue.AVBool True }
+          , Enabled = toMap { enabled = AttrValue.AVBool True }
+          }
+          s
+
+let iisAppPoolStateAttrs =
+      \(s : IisAppPoolState) ->
+        merge
+          { Exist            = toMap { exist = AttrValue.AVBool True }
+          , HasDotnetVersion =
+              \(v : Text) -> toMap { dotnet_version = AttrValue.AVText v }
+          }
+          s
+
+let iisWebsiteStateAttrs =
+      \(s : IisWebsiteState) ->
+        merge
+          { Exist           = toMap { exist   = AttrValue.AVBool True }
+          , Enabled         = toMap { enabled = AttrValue.AVBool True }
+          , Running         = toMap { running = AttrValue.AVBool True }
+          , InAppPool       =
+              \(p : Text) -> toMap { in_app_pool   = AttrValue.AVText p }
+          , HasPhysicalPath =
+              \(p : Text) -> toMap { physical_path = AttrValue.AVText p }
+          }
+          s
+
+let mysqlConfigStateAttrs =
+      \(s : MysqlConfigState) ->
+        merge
+          { EqText =
+              \(t : Text) ->
+                toMap
+                  { value =
+                      AttrValue.AVCompare
+                        { op = CompareOp.Eq, value = AttrLeaf.ALText t }
+                  }
+          , EqNat =
+              \(n : Natural) ->
+                toMap
+                  { value =
+                      AttrValue.AVCompare
+                        { op = CompareOp.Eq, value = AttrLeaf.ALNat n }
+                  }
+          , Compare =
+              \(c : { op : CompareOp, value : Natural }) ->
+                toMap
+                  { value =
+                      AttrValue.AVCompare
+                        { op = c.op, value = AttrLeaf.ALNat c.value }
+                  }
+          }
+          s
+
+let phpConfigStateAttrs =
+      \(s : PhpConfigState) ->
+        merge
+          { EqText =
+              \(t : Text) ->
+                toMap
+                  { value =
+                      AttrValue.AVCompare
+                        { op = CompareOp.Eq, value = AttrLeaf.ALText t }
+                  }
+          , EqNat =
+              \(n : Natural) ->
+                toMap
+                  { value =
+                      AttrValue.AVCompare
+                        { op = CompareOp.Eq, value = AttrLeaf.ALNat n }
+                  }
+          , Compare =
+              \(c : { op : CompareOp, value : Natural }) ->
+                toMap
+                  { value =
+                      AttrValue.AVCompare
+                        { op = c.op, value = AttrLeaf.ALNat c.value }
+                  }
+          , Match =
+              \(p : Text) ->
+                toMap
+                  { value =
+                      AttrValue.AVCompare
+                        { op = CompareOp.Match, value = AttrLeaf.ALRegex p }
+                  }
+          }
+          s
+
+let x509PrivateKeyStateAttrs =
+      \(s : X509PrivateKeyState) ->
+        merge
+          { Encrypted    = toMap { encrypted     = AttrValue.AVBool True }
+          , NotEncrypted = toMap { not_encrypted = AttrValue.AVBool True }
+          , Valid        = toMap { valid         = AttrValue.AVBool True }
+          , HasMatchingCertificate =
+              \(p : Text) ->
+                toMap { matching_certificate = AttrValue.AVText p }
+          }
+          s
+
+let zfsStateAttrs =
+      \(s : ZfsState) ->
+        merge
+          { Exist = toMap { exist = AttrValue.AVBool True }
+          , HasProperty =
+              \(rec : List { mapKey : Text, mapValue : Text }) ->
+                toMap
+                  { property =
+                      AttrValue.AVRecord (textRecToAttrLeafRec rec)
+                  }
+          }
+          s
+
+-- docker_container is a mixed-wildcard kind: known attr keys (exist/running/
+-- volume) are typed in the schema; inspect/inspect_include/inspection_not_include
+-- prefixed keys are accepted as wildcards. The Dhall encoder produces those
+-- prefix-tagged keys directly so the emitter can recover the original semantics.
+let dockerContainerStateAttrs =
+      \(s : DockerContainerState) ->
+        merge
+          { Exist   = toMap { exist   = AttrValue.AVBool True }
+          , Running = toMap { running = AttrValue.AVBool True }
+          , HasVolume =
+              \(v : { containerPath : Text, hostPath : Text }) ->
+                toMap
+                  { volume =
+                      AttrValue.AVList
+                        [ AttrLeaf.ALText v.containerPath
+                        , AttrLeaf.ALText v.hostPath
+                        ]
+                  }
+          , InspectEqText =
+              \(p : { keyPath : Text, value : Text }) ->
+                [ { mapKey = "inspect:" ++ p.keyPath
+                  , mapValue = AttrValue.AVText p.value
+                  }
+                ]
+          , InspectEqNat =
+              \(p : { keyPath : Text, value : Natural }) ->
+                [ { mapKey = "inspect:" ++ p.keyPath
+                  , mapValue = AttrValue.AVNat p.value
+                  }
+                ]
+          , InspectEqBool =
+              \(p : { keyPath : Text, value : Bool }) ->
+                [ { mapKey = "inspect:" ++ p.keyPath
+                  , mapValue = AttrValue.AVBool p.value
+                  }
+                ]
+          , InspectEqSymbol =
+              \(p : { keyPath : Text, value : Text }) ->
+                [ { mapKey = "inspect:" ++ p.keyPath
+                  , mapValue = AttrValue.AVSymbol p.value
+                  }
+                ]
+          , InspectInclude =
+              \(p : { keyPath : Text, value : Text }) ->
+                [ { mapKey = "inspect_include:" ++ p.keyPath
+                  , mapValue = AttrValue.AVText p.value
+                  }
+                ]
+          , InspectionNotInclude =
+              \(p : { key : Text, value : Text }) ->
+                [ { mapKey = "inspection_not_include:" ++ p.key
+                  , mapValue = AttrValue.AVText p.value
+                  }
+                ]
+          }
+          s
+
+let dockerImageStateAttrs =
+      \(s : DockerImageState) ->
+        merge
+          { Exist = toMap { exist = AttrValue.AVBool True }
+          , InspectEqText =
+              \(p : { keyPath : Text, value : Text }) ->
+                [ { mapKey = "inspect:" ++ p.keyPath
+                  , mapValue = AttrValue.AVText p.value
+                  }
+                ]
+          , InspectEqNat =
+              \(p : { keyPath : Text, value : Natural }) ->
+                [ { mapKey = "inspect:" ++ p.keyPath
+                  , mapValue = AttrValue.AVNat p.value
+                  }
+                ]
+          , InspectEqBool =
+              \(p : { keyPath : Text, value : Bool }) ->
+                [ { mapKey = "inspect:" ++ p.keyPath
+                  , mapValue = AttrValue.AVBool p.value
+                  }
+                ]
+          , InspectEqSymbol =
+              \(p : { keyPath : Text, value : Text }) ->
+                [ { mapKey = "inspect:" ++ p.keyPath
+                  , mapValue = AttrValue.AVSymbol p.value
+                  }
+                ]
+          , InspectInclude =
+              \(p : { keyPath : Text, value : Text }) ->
+                [ { mapKey = "inspect_include:" ++ p.keyPath
+                  , mapValue = AttrValue.AVText p.value
+                  }
+                ]
+          , InspectionNotInclude =
+              \(p : { key : Text, value : Text }) ->
+                [ { mapKey = "inspection_not_include:" ++ p.key
+                  , mapValue = AttrValue.AVText p.value
+                  }
+                ]
+          }
+          s
+
 -- Smart constructors --------------------------------------------------------
 
 let service
@@ -797,6 +1109,121 @@ let windowsRegistryKey
         , attrs = windowsRegistryKeyStateAttrs s
         }
 
+-- Phase 3 smart constructors -------------------------------------------------
+
+let lxc
+    : Text -> LxcState -> Assertion
+    = \(name : Text) ->
+      \(s : LxcState) ->
+        { kind = "lxc", primaryKey = name, attrs = lxcStateAttrs s }
+
+let mailAlias
+    : Text -> MailAliasState -> Assertion
+    = \(name : Text) ->
+      \(s : MailAliasState) ->
+        { kind = "mail_alias", primaryKey = name, attrs = mailAliasStateAttrs s }
+
+let ppa
+    : Text -> PpaState -> Assertion
+    = \(name : Text) ->
+      \(s : PpaState) ->
+        { kind = "ppa", primaryKey = name, attrs = ppaStateAttrs s }
+
+let yumrepo
+    : Text -> YumrepoState -> Assertion
+    = \(name : Text) ->
+      \(s : YumrepoState) ->
+        { kind = "yumrepo", primaryKey = name, attrs = yumrepoStateAttrs s }
+
+let iisAppPool
+    : Text -> IisAppPoolState -> Assertion
+    = \(name : Text) ->
+      \(s : IisAppPoolState) ->
+        { kind = "iis_app_pool"
+        , primaryKey = name
+        , attrs = iisAppPoolStateAttrs s
+        }
+
+let iisWebsite
+    : Text -> IisWebsiteState -> Assertion
+    = \(name : Text) ->
+      \(s : IisWebsiteState) ->
+        { kind = "iis_website"
+        , primaryKey = name
+        , attrs = iisWebsiteStateAttrs s
+        }
+
+let mysqlConfig
+    : Text -> MysqlConfigState -> Assertion
+    = \(name : Text) ->
+      \(s : MysqlConfigState) ->
+        { kind = "mysql_config"
+        , primaryKey = name
+        , attrs = mysqlConfigStateAttrs s
+        }
+
+-- phpConfig: single-arg form. The describe block becomes
+-- @describe php_config('default_mimetype') do@.
+let phpConfig
+    : Text -> PhpConfigState -> Assertion
+    = \(name : Text) ->
+      \(s : PhpConfigState) ->
+        { kind = "php_config"
+        , primaryKey = name
+        , attrs = phpConfigStateAttrs s
+        }
+
+-- phpConfigWithIni: two-arg form. The encoder injects an extra @_ini@
+-- attribute that the emitter consumes during header generation to produce
+-- @describe php_config('display_errors', :ini => '/etc/php/7.1/fpm/php.ini') do@.
+let phpConfigWithIni
+    : Text -> Text -> PhpConfigState -> Assertion
+    = \(name : Text) ->
+      \(iniPath : Text) ->
+      \(s : PhpConfigState) ->
+        { kind = "php_config"
+        , primaryKey = name
+        , attrs =
+            phpConfigStateAttrs s
+              # [ { mapKey = "_ini"
+                  , mapValue = AttrValue.AVText iniPath
+                  }
+                ]
+        }
+
+let x509PrivateKey
+    : Text -> X509PrivateKeyState -> Assertion
+    = \(path : Text) ->
+      \(s : X509PrivateKeyState) ->
+        { kind = "x509_private_key"
+        , primaryKey = path
+        , attrs = x509PrivateKeyStateAttrs s
+        }
+
+let zfs
+    : Text -> ZfsState -> Assertion
+    = \(name : Text) ->
+      \(s : ZfsState) ->
+        { kind = "zfs", primaryKey = name, attrs = zfsStateAttrs s }
+
+let dockerContainer
+    : Text -> DockerContainerState -> Assertion
+    = \(name : Text) ->
+      \(s : DockerContainerState) ->
+        { kind = "docker_container"
+        , primaryKey = name
+        , attrs = dockerContainerStateAttrs s
+        }
+
+let dockerImage
+    : Text -> DockerImageState -> Assertion
+    = \(name : Text) ->
+      \(s : DockerImageState) ->
+        { kind = "docker_image"
+        , primaryKey = name
+        , attrs = dockerImageStateAttrs s
+        }
+
 in  { AttrValue         = AttrValue
     , AttrLeaf          = AttrLeaf
     , CompareOp         = CompareOp
@@ -860,5 +1287,31 @@ in  { AttrValue         = AttrValue
     , cron                  = cron
     , x509Certificate       = x509Certificate
     , windowsRegistryKey    = windowsRegistryKey
+    -- Phase 3: serverspec.org coverage completion
+    , LxcState              = LxcState
+    , MailAliasState        = MailAliasState
+    , PpaState              = PpaState
+    , YumrepoState          = YumrepoState
+    , IisAppPoolState       = IisAppPoolState
+    , IisWebsiteState       = IisWebsiteState
+    , MysqlConfigState      = MysqlConfigState
+    , PhpConfigState        = PhpConfigState
+    , X509PrivateKeyState   = X509PrivateKeyState
+    , ZfsState              = ZfsState
+    , DockerContainerState  = DockerContainerState
+    , DockerImageState      = DockerImageState
+    , lxc                   = lxc
+    , mailAlias             = mailAlias
+    , ppa                   = ppa
+    , yumrepo               = yumrepo
+    , iisAppPool            = iisAppPool
+    , iisWebsite            = iisWebsite
+    , mysqlConfig           = mysqlConfig
+    , phpConfig             = phpConfig
+    , phpConfigWithIni      = phpConfigWithIni
+    , x509PrivateKey        = x509PrivateKey
+    , zfs                   = zfs
+    , dockerContainer       = dockerContainer
+    , dockerImage           = dockerImage
     , targetBackend     = "serverspec"
     }

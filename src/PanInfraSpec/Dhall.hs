@@ -42,6 +42,12 @@ backendAllowedKinds = \case
     , "linux_kernel_parameter", "cgroup"
     , "windows_feature", "windows_registry_key"
     , "x509_certificate", "cron"
+    -- Phase 3: serverspec.org coverage completion
+    , "lxc", "mail_alias", "ppa", "yumrepo"
+    , "iis_app_pool", "iis_website"
+    , "mysql_config", "php_config"
+    , "x509_private_key", "zfs"
+    , "docker_container", "docker_image"
     ]
   _            -> []
 
