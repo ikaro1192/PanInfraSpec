@@ -102,6 +102,15 @@ serverspecSchema = Map.fromList
   , ("linux_kernel_parameter", Map.fromList
       [ ("value", ATText) ])
   , ("cgroup", Map.empty)  -- wildcard kind: dynamic parameter names
+  , ("docker_container", Map.fromList
+      [ ("exist",   ATBool)
+      , ("running", ATBool)
+      , ("volume",  ATText)
+      ])
+  , ("docker_image", Map.fromList
+      [ ("exist", ATBool) ])
+  , ("lxc", Map.fromList
+      [ ("exist", ATBool), ("running", ATBool) ])
   ]
 
 -- | Kinds whose @describe@ block takes no primary-key argument
@@ -288,6 +297,15 @@ formatItLine "linux_kernel_parameter" "value" (AVText v) =
 -- cgroup (wildcard schema): each attr key is a cgroup parameter name
 formatItLine "cgroup"    key              (AVText v) =
   "its(" <> rubyString key <> ") { should eq " <> rubyString v <> " }"
+-- docker_container
+formatItLine "docker_container" "exist"   _          = "it { should exist }"
+formatItLine "docker_container" "running" _          = "it { should be_running }"
+formatItLine "docker_container" "volume"  (AVText v) = "it { should have_volume " <> rubyString v <> " }"
+-- docker_image
+formatItLine "docker_image" "exist"       _          = "it { should exist }"
+-- lxc
+formatItLine "lxc"       "exist"          _          = "it { should exist }"
+formatItLine "lxc"       "running"        _          = "it { should be_running }"
 formatItLine k key _ =
   "# UNREACHABLE: unmatched (" <> pretty k <> ", " <> pretty key <> ")"
 

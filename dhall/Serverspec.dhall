@@ -82,6 +82,16 @@ let LinuxKernelParameterState = < HasValue : Text >
 let CgroupState =
       < HasParameter : { name : Text, value : Text } >
 
+-- PR-3 container resources --------------------------------------------------
+
+let DockerContainerState =
+      < Exist
+      | Running
+      | HasVolume : Text
+      >
+let DockerImageState = < Exist >
+let LxcState = < Exist | Running >
+
 
 
 -- Attribute encoders --------------------------------------------------------
@@ -285,6 +295,26 @@ let cgroupStateAttrs =
           }
           s
 
+let dockerContainerStateAttrs =
+      \(s : DockerContainerState) ->
+        merge
+          { Exist     = toMap { exist   = AttrValue.AVBool True }
+          , Running   = toMap { running = AttrValue.AVBool True }
+          , HasVolume = \(v : Text) -> toMap { volume = AttrValue.AVText v }
+          }
+          s
+
+let dockerImageStateAttrs =
+      \(_ : DockerImageState) -> toMap { exist = AttrValue.AVBool True }
+
+let lxcStateAttrs =
+      \(s : LxcState) ->
+        merge
+          { Exist   = toMap { exist   = AttrValue.AVBool True }
+          , Running = toMap { running = AttrValue.AVBool True }
+          }
+          s
+
 -- Smart constructors --------------------------------------------------------
 
 let service
@@ -459,6 +489,30 @@ let cgroup
       \(s : CgroupState) ->
         { kind = "cgroup", primaryKey = name, attrs = cgroupStateAttrs s }
 
+let dockerContainer
+    : Text -> DockerContainerState -> Assertion
+    = \(name : Text) ->
+      \(s : DockerContainerState) ->
+        { kind = "docker_container"
+        , primaryKey = name
+        , attrs = dockerContainerStateAttrs s
+        }
+
+let dockerImage
+    : Text -> DockerImageState -> Assertion
+    = \(name : Text) ->
+      \(s : DockerImageState) ->
+        { kind = "docker_image"
+        , primaryKey = name
+        , attrs = dockerImageStateAttrs s
+        }
+
+let lxc
+    : Text -> LxcState -> Assertion
+    = \(name : Text) ->
+      \(s : LxcState) ->
+        { kind = "lxc", primaryKey = name, attrs = lxcStateAttrs s }
+
 in  { AttrValue         = AttrValue
     , Assertion         = Assertion
     , ServiceState      = ServiceState
@@ -486,6 +540,9 @@ in  { AttrValue         = AttrValue
     , LinuxAuditSystemState     = LinuxAuditSystemState
     , LinuxKernelParameterState = LinuxKernelParameterState
     , CgroupState               = CgroupState
+    , DockerContainerState      = DockerContainerState
+    , DockerImageState          = DockerImageState
+    , LxcState                  = LxcState
     , service           = service
     , package           = package
     , port              = port
@@ -511,5 +568,8 @@ in  { AttrValue         = AttrValue
     , linuxAuditSystem      = linuxAuditSystem
     , linuxKernelParameter  = linuxKernelParameter
     , cgroup                = cgroup
+    , dockerContainer       = dockerContainer
+    , dockerImage           = dockerImage
+    , lxc                   = lxc
     , targetBackend     = "serverspec"
     }

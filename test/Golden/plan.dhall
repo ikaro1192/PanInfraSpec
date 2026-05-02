@@ -59,5 +59,11 @@ in  Plan.make Spec.targetBackend
               ( Spec.CgroupState.HasParameter
                   { name = "cpu.shares", value = "256" }
               )
+          , Spec.dockerContainer "web" Spec.DockerContainerState.Exist
+          , Spec.dockerContainer "web" Spec.DockerContainerState.Running
+          , Spec.dockerContainer "web" (Spec.DockerContainerState.HasVolume "/var/www")
+          , Spec.dockerImage "nginx:latest" Spec.DockerImageState.Exist
+          , Spec.lxc "container1" Spec.LxcState.Exist
+          , Spec.lxc "container1" Spec.LxcState.Running
           ]
       ]

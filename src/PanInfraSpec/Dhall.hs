@@ -40,6 +40,7 @@ backendAllowedKinds = \case
     , "ip6tables", "ipfilter", "ipnat", "iptables", "routing_table"
     , "selinux", "selinux_module", "linux_audit_system"
     , "linux_kernel_parameter", "cgroup"
+    , "docker_container", "docker_image", "lxc"
     ]
   _            -> []
 

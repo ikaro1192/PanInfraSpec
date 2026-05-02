@@ -189,6 +189,9 @@ matching `*State` union.
 | Linux audit system (singleton) | `linuxAuditSystem : LinuxAuditSystemState -> Assertion` | `Running`, `Enabled` |
 | Linux kernel parameter | `linuxKernelParameter : Text -> LinuxKernelParameterState -> Assertion` | `HasValue : Text` |
 | Cgroup | `cgroup : Text -> CgroupState -> Assertion` | `HasParameter : { name : Text, value : Text }` |
+| Docker container | `dockerContainer : Text -> DockerContainerState -> Assertion` | `Exist`, `Running`, `HasVolume : Text` |
+| Docker image | `dockerImage : Text -> DockerImageState -> Assertion` | `Exist` |
+| LXC | `lxc : Text -> LxcState -> Assertion` | `Exist`, `Running` |
 
 To express more than one state for the same resource (e.g. nginx must be both
 running and enabled), write two assertions with the same primary key — they

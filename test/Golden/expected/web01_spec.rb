@@ -23,6 +23,16 @@ describe default_gateway do
   its(:ipaddress) { should eq '10.0.1.1' }
 end
 
+describe docker_container('web') do
+  it { should exist }
+  it { should be_running }
+  it { should have_volume '/var/www' }
+end
+
+describe docker_image('nginx:latest') do
+  it { should exist }
+end
+
 describe file('/etc/nginx/nginx.conf') do
   it { should exist }
 end
@@ -80,6 +90,11 @@ end
 
 describe linux_kernel_parameter('net.ipv4.ip_forward') do
   its(:value) { should eq '1' }
+end
+
+describe lxc('container1') do
+  it { should exist }
+  it { should be_running }
 end
 
 describe mount('/data') do
