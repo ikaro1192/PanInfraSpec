@@ -44,18 +44,19 @@ instance Dhall.FromDhall Node where
       <*> Dhall.field "tags"     Dhall.auto
 
 -- | Comparison operator for 'AVCompare'. Mirrors the Dhall union
--- @< Lt | Le | Gt | Ge | Eq >@. Used for matchers like
--- @validity_in_days should be > 30@.
-data CompareOp = OpLt | OpLe | OpGt | OpGe | OpEq
+-- @< Lt | Le | Gt | Ge | Eq | Match >@. Used for matchers like
+-- @validity_in_days should be > 30@ and @value should match /pattern/@.
+data CompareOp = OpLt | OpLe | OpGt | OpGe | OpEq | OpMatch
   deriving stock (Show, Eq, Generic)
 
 instance Dhall.FromDhall CompareOp where
   autoWith _ = Dhall.union
-    (  (OpLt <$ Dhall.constructor "Lt" Dhall.unit)
-    <> (OpLe <$ Dhall.constructor "Le" Dhall.unit)
-    <> (OpGt <$ Dhall.constructor "Gt" Dhall.unit)
-    <> (OpGe <$ Dhall.constructor "Ge" Dhall.unit)
-    <> (OpEq <$ Dhall.constructor "Eq" Dhall.unit)
+    (  (OpLt    <$ Dhall.constructor "Lt"    Dhall.unit)
+    <> (OpLe    <$ Dhall.constructor "Le"    Dhall.unit)
+    <> (OpGt    <$ Dhall.constructor "Gt"    Dhall.unit)
+    <> (OpGe    <$ Dhall.constructor "Ge"    Dhall.unit)
+    <> (OpEq    <$ Dhall.constructor "Eq"    Dhall.unit)
+    <> (OpMatch <$ Dhall.constructor "Match" Dhall.unit)
     )
 
 -- | Scalar leaf carried inside compound 'AttrValue' constructors
@@ -67,6 +68,7 @@ data AttrLeaf
   | ALNat    Natural
   | ALBool   Bool
   | ALSymbol Text
+  | ALRegex  Text   -- ^ Ruby regex literal payload (without surrounding @/.../@).
   deriving stock (Show, Eq, Generic)
 
 instance Dhall.FromDhall AttrLeaf where
@@ -75,6 +77,7 @@ instance Dhall.FromDhall AttrLeaf where
     <> (ALNat    <$> Dhall.constructor "ALNat"    Dhall.auto)
     <> (ALBool   <$> Dhall.constructor "ALBool"   Dhall.auto)
     <> (ALSymbol <$> Dhall.constructor "ALSymbol" Dhall.auto)
+    <> (ALRegex  <$> Dhall.constructor "ALRegex"  Dhall.auto)
     )
 
 -- | Attribute value carried inside an 'Assertion'. Mirrors the Dhall union

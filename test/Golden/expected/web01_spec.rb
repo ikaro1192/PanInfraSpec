@@ -27,6 +27,21 @@ describe default_gateway do
   its(:ipaddress) { should eq '10.0.1.1' }
 end
 
+describe docker_container('focused_curie') do
+  it { should exist }
+  its(['HostConfig.NetworkMode']) { should eq 'bridge' }
+  its(['Path']) { should eq '/bin/sh' }
+  it { should be_running }
+  it { should have_volume('/tmp', '/data') }
+end
+
+describe docker_image('busybox:latest') do
+  it { should exist }
+  its(['Architecture']) { should eq 'amd64' }
+  its(['Config.Cmd']) { should include '/bin/sh' }
+  its(:inspection) { should_not include 'Architecture' => 'i386' }
+end
+
 describe file('/etc/hosts') do
   it { should be_file }
 end
@@ -96,6 +111,19 @@ describe host('example.jp') do
   it { should be_resolvable }
 end
 
+describe iis_app_pool('Default App Pool') do
+  it { should have_dotnet_version('2.0') }
+  it { should exist }
+end
+
+describe iis_website('Default Website') do
+  it { should be_enabled }
+  it { should exist }
+  it { should be_in_app_pool('Default App Pool') }
+  it { should have_physical_path('C:\\inetpub\\www') }
+  it { should be_running }
+end
+
 describe interface('eth0') do
   it { should exist }
   it { should have_ipv4_address '10.0.1.10' }
@@ -133,18 +161,56 @@ describe linux_kernel_parameter('net.ipv4.ip_forward') do
   its(:value) { should eq '1' }
 end
 
+describe lxc('ct01') do
+  it { should exist }
+  it { should be_running }
+end
+
+describe mail_alias('daemon') do
+  it { should be_aliased_to 'root' }
+end
+
 describe mount('/data') do
   its(:device) { should eq '/dev/sda1' }
   its(:fstype) { should eq 'ext4' }
   it { should be_mounted }
 end
 
+describe mysql_config('innodb-buffer-pool-size') do
+  its(:value) { should be > 100000000 }
+end
+
+describe mysql_config('socket') do
+  its(:value) { should eq '/tmp/mysql.sock' }
+end
+
 describe package('nginx') do
   it { should be_installed }
 end
 
+describe php_config('default_mimetype') do
+  its(:value) { should eq 'text/html' }
+end
+
+describe php_config('display_errors', :ini => '/etc/php/7.1/fpm/php.ini') do
+  its(:value) { should eq 1 }
+end
+
+describe php_config('mbstring.http_output_conv_mimetypes') do
+  its(:value) { should match /application/ }
+end
+
+describe php_config('session.cache_expire') do
+  its(:value) { should eq 180 }
+end
+
 describe port(80) do
   it { should be_listening.with('tcp') }
+end
+
+describe ppa('launchpad-username/ppa-name') do
+  it { should be_enabled }
+  it { should exist }
 end
 
 describe process('nginx') do
@@ -198,4 +264,20 @@ end
 
 describe x509_certificate('/etc/ssl/cert.pem') do
   its(:validity_in_days) { should be > 30 }
+end
+
+describe x509_private_key('/my/private/server-key.pem') do
+  it { should have_matching_certificate('/my/certs/server-cert.pem') }
+  it { should_not be_encrypted }
+  it { should be_valid }
+end
+
+describe yumrepo('epel') do
+  it { should be_enabled }
+  it { should exist }
+end
+
+describe zfs('rpool') do
+  it { should exist }
+  it { should have_property 'compression' => 'off', 'mountpoint' => '/rpool' }
 end

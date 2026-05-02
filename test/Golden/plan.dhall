@@ -133,5 +133,81 @@ in  Plan.make Spec.targetBackend
           , Spec.process "nginx"
               (Spec.ProcessState.HasArgs "-c /etc/nginx/nginx.conf")
           , Spec.process "nginx" (Spec.ProcessState.HasCount 4)
+          -- Phase 3: serverspec.org coverage completion ----------------------
+          , Spec.lxc "ct01" Spec.LxcState.Exist
+          , Spec.lxc "ct01" Spec.LxcState.Running
+          , Spec.mailAlias "daemon" (Spec.MailAliasState.AliasedTo "root")
+          , Spec.ppa "launchpad-username/ppa-name" Spec.PpaState.Exist
+          , Spec.ppa "launchpad-username/ppa-name" Spec.PpaState.Enabled
+          , Spec.yumrepo "epel" Spec.YumrepoState.Exist
+          , Spec.yumrepo "epel" Spec.YumrepoState.Enabled
+          , Spec.iisAppPool "Default App Pool" Spec.IisAppPoolState.Exist
+          , Spec.iisAppPool "Default App Pool"
+              (Spec.IisAppPoolState.HasDotnetVersion "2.0")
+          , Spec.iisWebsite "Default Website" Spec.IisWebsiteState.Exist
+          , Spec.iisWebsite "Default Website" Spec.IisWebsiteState.Enabled
+          , Spec.iisWebsite "Default Website" Spec.IisWebsiteState.Running
+          , Spec.iisWebsite "Default Website"
+              (Spec.IisWebsiteState.InAppPool "Default App Pool")
+          , Spec.iisWebsite "Default Website"
+              (Spec.IisWebsiteState.HasPhysicalPath "C:\\inetpub\\www")
+          , Spec.mysqlConfig "innodb-buffer-pool-size"
+              ( Spec.MysqlConfigState.Compare
+                  { op = Spec.CompareOp.Gt, value = 100000000 }
+              )
+          , Spec.mysqlConfig "socket"
+              (Spec.MysqlConfigState.EqText "/tmp/mysql.sock")
+          , Spec.phpConfig "default_mimetype"
+              (Spec.PhpConfigState.EqText "text/html")
+          , Spec.phpConfig "session.cache_expire"
+              (Spec.PhpConfigState.EqNat 180)
+          , Spec.phpConfig "mbstring.http_output_conv_mimetypes"
+              (Spec.PhpConfigState.Match "application")
+          , Spec.phpConfigWithIni "display_errors" "/etc/php/7.1/fpm/php.ini"
+              (Spec.PhpConfigState.EqNat 1)
+          , Spec.x509PrivateKey "/my/private/server-key.pem"
+              Spec.X509PrivateKeyState.NotEncrypted
+          , Spec.x509PrivateKey "/my/private/server-key.pem"
+              Spec.X509PrivateKeyState.Valid
+          , Spec.x509PrivateKey "/my/private/server-key.pem"
+              ( Spec.X509PrivateKeyState.HasMatchingCertificate
+                  "/my/certs/server-cert.pem"
+              )
+          , Spec.zfs "rpool" Spec.ZfsState.Exist
+          , Spec.zfs "rpool"
+              ( Spec.ZfsState.HasProperty
+                  [ { mapKey = "compression", mapValue = "off" }
+                  , { mapKey = "mountpoint",  mapValue = "/rpool" }
+                  ]
+              )
+          , Spec.dockerContainer "focused_curie"
+              Spec.DockerContainerState.Exist
+          , Spec.dockerContainer "focused_curie"
+              Spec.DockerContainerState.Running
+          , Spec.dockerContainer "focused_curie"
+              ( Spec.DockerContainerState.HasVolume
+                  { containerPath = "/tmp", hostPath = "/data" }
+              )
+          , Spec.dockerContainer "focused_curie"
+              ( Spec.DockerContainerState.InspectEqText
+                  { keyPath = "Path", value = "/bin/sh" }
+              )
+          , Spec.dockerContainer "focused_curie"
+              ( Spec.DockerContainerState.InspectEqText
+                  { keyPath = "HostConfig.NetworkMode", value = "bridge" }
+              )
+          , Spec.dockerImage "busybox:latest" Spec.DockerImageState.Exist
+          , Spec.dockerImage "busybox:latest"
+              ( Spec.DockerImageState.InspectEqText
+                  { keyPath = "Architecture", value = "amd64" }
+              )
+          , Spec.dockerImage "busybox:latest"
+              ( Spec.DockerImageState.InspectInclude
+                  { keyPath = "Config.Cmd", value = "/bin/sh" }
+              )
+          , Spec.dockerImage "busybox:latest"
+              ( Spec.DockerImageState.InspectionNotInclude
+                  { key = "Architecture", value = "i386" }
+              )
           ]
       ]
