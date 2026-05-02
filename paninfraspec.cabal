@@ -1,0 +1,84 @@
+cabal-version:      3.0
+name:               paninfraspec
+version:            0.1.0.0
+synopsis:           Multi-input / multi-output compiler for infra specs (Phase 1: Serverspec)
+description:        Generates Serverspec Ruby files from per-backend Dhall preludes
+                    via a Generic Semantic AST. See specification.md.
+build-type:         Simple
+
+common deps
+  default-language: GHC2021
+  default-extensions:
+      OverloadedStrings
+    , OverloadedLists
+    , LambdaCase
+    , MultiWayIf
+    , RecordWildCards
+    , DerivingStrategies
+    , DeriveAnyClass
+    , DuplicateRecordFields
+    , TypeApplications
+    , StrictData
+  ghc-options:
+    -Wall
+    -Werror
+    -Wcompat
+    -Wno-orphans
+    -Widentities
+    -Wincomplete-record-updates
+    -Wredundant-constraints
+    -Wincomplete-uni-patterns
+    -Wpartial-fields
+    -Werror=incomplete-patterns
+
+  build-depends:
+      base                 >=4.18 && <5
+    , text
+    , bytestring
+    , containers
+    , aeson                >=2.0
+    , dhall
+    , prettyprinter
+    , optparse-applicative
+    , filepath
+    , directory
+
+library
+  import:           deps
+  hs-source-dirs:   src
+  exposed-modules:
+      PanInfraSpec.IR
+    , PanInfraSpec.Dhall
+    , PanInfraSpec.Resolve
+    , PanInfraSpec.Emit
+    , PanInfraSpec.Emit.Serverspec
+    , PanInfraSpec.DumpPlan
+    , PanInfraSpec.SoT
+    , PanInfraSpec.SoT.Terraform
+    , PanInfraSpec.CLI
+
+executable paninfraspec-gen
+  import:           deps
+  hs-source-dirs:   app
+  main-is:          Main.hs
+  build-depends:    paninfraspec
+
+test-suite paninfraspec-test
+  import:           deps
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   test
+  main-is:          Spec.hs
+  other-modules:
+      Unit.ValidateTest
+    , Roundtrip.DhallEncodingTest
+    , Property.EmitTest
+    , Synth.HundredHostsTest
+    , SoT.TerraformTest
+  build-depends:
+      paninfraspec
+    , tasty
+    , tasty-golden
+    , tasty-hunit
+    , tasty-quickcheck
+    , QuickCheck
+    , bytestring

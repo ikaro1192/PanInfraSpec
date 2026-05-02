@@ -1,0 +1,65 @@
+{
+  "version": 4,
+  "terraform_version": "1.7.0",
+  "serial": 12,
+  "lineage": "example",
+  "outputs": {},
+  "resources": [
+    {
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "web",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "i-aaaa1111",
+            "private_ip": "10.0.1.10",
+            "tags": {
+              "Name": "web01",
+              "Role": "Web",
+              "Env": "prod",
+              "frontend": "frontend",
+              "metrics": "metrics"
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "i-aaaa2222",
+            "private_ip": "10.0.1.11",
+            "tags": {
+              "Name": "web02",
+              "Role": "Web",
+              "Env": "prod",
+              "frontend": "frontend"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "db",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "i-bbbb1111",
+            "private_ip": "10.0.2.10",
+            "tags": {
+              "Name": "db01",
+              "Role": "DBPrimary",
+              "Env": "prod",
+              "metrics": "metrics"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

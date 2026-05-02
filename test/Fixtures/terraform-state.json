@@ -1,0 +1,73 @@
+{
+  "version": 4,
+  "terraform_version": "1.7.0",
+  "serial": 1,
+  "lineage": "fixture",
+  "outputs": {},
+  "resources": [
+    {
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "web",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "i-0a1b2c3d4e",
+            "private_ip": "10.0.1.10",
+            "public_ip": "203.0.113.10",
+            "tags": {
+              "Name": "web01",
+              "Role": "Web",
+              "Env": "prod",
+              "Team": "platform"
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "i-1b2c3d4e5f",
+            "private_ip": "10.0.1.11",
+            "tags": {
+              "Name": "web02",
+              "Role": "Web",
+              "Env": "prod"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "db",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "i-2c3d4e5f60",
+            "tags": {
+              "Name": "db01",
+              "Env": "prod"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "web_sg",
+      "instances": [
+        {
+          "attributes": {
+            "id": "sg-deadbeef"
+          }
+        }
+      ]
+    }
+  ]
+}
