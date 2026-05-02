@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Disable autocrlf (Windows) so golden fixtures keep LF
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - uses: actions/checkout@v4
+
+      - id: setup
+        # haskell-actions/setup@v2.11.0
+        uses: haskell-actions/setup@cd0d9bdd65b20557f41bea4dbe43d0b5fbbfe553
+        with:
+          ghc-version: '9.6.7'
+          cabal-version: '3.10'
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.setup.outputs.cabal-store }}
+            dist-newstyle
+          key: ${{ runner.os }}-ghc${{ steps.setup.outputs.ghc-version }}-${{ hashFiles('**/cabal.project.freeze', '**/*.cabal') }}
+          restore-keys: |
+            ${{ runner.os }}-ghc${{ steps.setup.outputs.ghc-version }}-
+
+      - name: Patch freeze for Windows zlib (use bundled-c-zlib, no pkg-config)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/zlib -bundled-c-zlib +non-blocking-ffi +pkg-config/zlib +bundled-c-zlib +non-blocking-ffi -pkg-config/' cabal.project.freeze
+          grep '^             zlib ' cabal.project.freeze
+
+      - run: cabal update
+      - run: cabal build all --enable-tests
+      - run: cabal test all --test-show-details=streaming
