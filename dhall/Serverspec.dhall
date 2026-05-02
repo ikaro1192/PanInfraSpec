@@ -37,12 +37,42 @@ let CommandState = < ExitCode : Natural >
 
 -- Phase 2 expanded states ---------------------------------------------------
 
+let PermissionScope = < Owner | Group | Others >
+
 let FileState =
       < Exist
       | OwnedBy     : Text
       | GroupedInto : Text
       | Mode        : Natural
       | Contains    : Text
+      -- Phase 2 follow-up: simple file-type matchers (no arguments)
+      | BeFile
+      | BeDirectory
+      | BeSymlink
+      | BeSocket
+      | BePipe
+      | BeBlockDevice
+      | BeCharacterDevice
+      | BeImmutable
+      -- Phase 2 follow-up: permission chain matchers
+      | Readable
+      | ReadableByScope   : PermissionScope
+      | ReadableByUser    : Text
+      | Writable
+      | WritableByScope   : PermissionScope
+      | WritableByUser    : Text
+      | Executable
+      | ExecutableByScope : PermissionScope
+      | ExecutableByUser  : Text
+      -- Phase 2 follow-up: contain chain matchers
+      | ContainsFromTo : { pattern : Text, from : Text, to : Text }
+      | ContainsAfter  : { pattern : Text, after : Text }
+      | ContainsBefore : { pattern : Text, before : Text }
+      -- Phase 2 follow-up: link / mounted matchers
+      | LinkedTo        : Text
+      | Mounted
+      | MountedWith     : List { mapKey : Text, mapValue : Text }
+      | MountedOnlyWith : List { mapKey : Text, mapValue : Text }
       >
 
 let UserState =
@@ -51,12 +81,19 @@ let UserState =
       | BelongsToGroup   : Text
       | HasHomeDirectory : Text
       | HasLoginShell    : Text
+      -- Phase 2 follow-up
+      | BelongsToPrimaryGroup : Text
+      | HasAuthorizedKey      : Text
       >
 
 let GroupState  = < Exist | HasGid : Natural >
 let ProcessState =
       < Running
       | RunByUser : Text
+      -- Phase 2 follow-up: its(:group/:args/:count)
+      | HasGroup : Text
+      | HasArgs  : Text
+      | HasCount : Natural
       >
 let MountState =
       < Mounted
@@ -67,6 +104,9 @@ let InterfaceState =
       < Exist
       | HasSpeed       : Natural
       | HasIpv4Address : Text
+      -- Phase 2 follow-up
+      | Up
+      | HasIpv6Address : Text
       >
 let KernelModuleState = < Loaded >
 
@@ -118,6 +158,38 @@ let WindowsRegistryKeyState =
 
 -- Attribute encoders --------------------------------------------------------
 
+-- Convert PermissionScope to the Ruby symbol payload Serverspec expects on
+-- @be_readable.by(:owned)@ etc. (`:owned`/`:grouped`/`:others`, not the more
+-- intuitive `:owner` family).
+let scopeName =
+      \(sc : PermissionScope) ->
+        merge
+          { Owner  = "owned"
+          , Group  = "grouped"
+          , Others = "others"
+          }
+          sc
+
+-- Lift a List of (Text -> Text) record entries into a List of (Text ->
+-- AttrLeaf) entries by wrapping each value in @AttrLeaf.ALText@. Used when a
+-- Dhall constructor takes a Text-only record (e.g. @MountedWith@) but the IR
+-- requires AttrLeaf payloads.
+let textRecToAttrLeafRec =
+      \(rec : List { mapKey : Text, mapValue : Text }) ->
+        List/fold
+          { mapKey : Text, mapValue : Text }
+          rec
+          (List { mapKey : Text, mapValue : AttrLeaf })
+          ( \(e : { mapKey : Text, mapValue : Text }) ->
+            \(acc : List { mapKey : Text, mapValue : AttrLeaf }) ->
+                [ { mapKey = e.mapKey
+                  , mapValue = AttrLeaf.ALText e.mapValue
+                  }
+                ]
+              # acc
+          )
+          ([] : List { mapKey : Text, mapValue : AttrLeaf })
+
 let serviceStateAttrs =
       \(s : ServiceState) ->
         merge
@@ -150,6 +222,93 @@ let fileStateAttrs =
           , GroupedInto = \(g : Text) -> toMap { grouped_into = AttrValue.AVText g }
           , Mode        = \(m : Natural) -> toMap { mode = AttrValue.AVNat m }
           , Contains    = \(p : Text) -> toMap { contains = AttrValue.AVText p }
+          -- Phase 2 follow-up: simple file-type matchers
+          , BeFile            = toMap { file_type        = AttrValue.AVBool True }
+          , BeDirectory       = toMap { directory        = AttrValue.AVBool True }
+          , BeSymlink         = toMap { symlink          = AttrValue.AVBool True }
+          , BeSocket          = toMap { socket           = AttrValue.AVBool True }
+          , BePipe            = toMap { pipe             = AttrValue.AVBool True }
+          , BeBlockDevice     = toMap { block_device     = AttrValue.AVBool True }
+          , BeCharacterDevice = toMap { character_device = AttrValue.AVBool True }
+          , BeImmutable       = toMap { immutable        = AttrValue.AVBool True }
+          -- Phase 2 follow-up: permission chain matchers. The base flag
+          -- (e.g. `readable`) is always emitted alongside any modifier; the
+          -- emit layer collapses both keys into a single chained Ruby line.
+          , Readable        = toMap { readable = AttrValue.AVBool True }
+          , ReadableByScope =
+              \(sc : PermissionScope) ->
+                toMap
+                  { readable          = AttrValue.AVBool True
+                  , readable_by_scope = AttrValue.AVSymbol (scopeName sc)
+                  }
+          , ReadableByUser =
+              \(u : Text) ->
+                toMap
+                  { readable         = AttrValue.AVBool True
+                  , readable_by_user = AttrValue.AVText u
+                  }
+          , Writable        = toMap { writable = AttrValue.AVBool True }
+          , WritableByScope =
+              \(sc : PermissionScope) ->
+                toMap
+                  { writable          = AttrValue.AVBool True
+                  , writable_by_scope = AttrValue.AVSymbol (scopeName sc)
+                  }
+          , WritableByUser =
+              \(u : Text) ->
+                toMap
+                  { writable         = AttrValue.AVBool True
+                  , writable_by_user = AttrValue.AVText u
+                  }
+          , Executable        = toMap { executable = AttrValue.AVBool True }
+          , ExecutableByScope =
+              \(sc : PermissionScope) ->
+                toMap
+                  { executable          = AttrValue.AVBool True
+                  , executable_by_scope = AttrValue.AVSymbol (scopeName sc)
+                  }
+          , ExecutableByUser =
+              \(u : Text) ->
+                toMap
+                  { executable         = AttrValue.AVBool True
+                  , executable_by_user = AttrValue.AVText u
+                  }
+          -- Phase 2 follow-up: contain chain matchers
+          , ContainsFromTo =
+              \(c : { pattern : Text, from : Text, to : Text }) ->
+                toMap
+                  { contains      = AttrValue.AVText c.pattern
+                  , contains_from = AttrValue.AVText c.from
+                  , contains_to   = AttrValue.AVText c.to
+                  }
+          , ContainsAfter =
+              \(c : { pattern : Text, after : Text }) ->
+                toMap
+                  { contains       = AttrValue.AVText c.pattern
+                  , contains_after = AttrValue.AVText c.after
+                  }
+          , ContainsBefore =
+              \(c : { pattern : Text, before : Text }) ->
+                toMap
+                  { contains        = AttrValue.AVText c.pattern
+                  , contains_before = AttrValue.AVText c.before
+                  }
+          -- Phase 2 follow-up: link / mounted matchers
+          , LinkedTo = \(p : Text) -> toMap { linked_to = AttrValue.AVText p }
+          , Mounted  = toMap { be_mounted = AttrValue.AVBool True }
+          , MountedWith =
+              \(rec : List { mapKey : Text, mapValue : Text }) ->
+                toMap
+                  { be_mounted   = AttrValue.AVBool True
+                  , mounted_with = AttrValue.AVRecord (textRecToAttrLeafRec rec)
+                  }
+          , MountedOnlyWith =
+              \(rec : List { mapKey : Text, mapValue : Text }) ->
+                toMap
+                  { be_mounted        = AttrValue.AVBool True
+                  , mounted_only_with =
+                      AttrValue.AVRecord (textRecToAttrLeafRec rec)
+                  }
           }
           s
 
@@ -169,6 +328,10 @@ let userStateAttrs =
           , BelongsToGroup   = \(g : Text) -> toMap { belongs_to_group = AttrValue.AVText g }
           , HasHomeDirectory = \(p : Text) -> toMap { home_directory = AttrValue.AVText p }
           , HasLoginShell    = \(p : Text) -> toMap { login_shell = AttrValue.AVText p }
+          , BelongsToPrimaryGroup =
+              \(g : Text) -> toMap { belongs_to_primary_group = AttrValue.AVText g }
+          , HasAuthorizedKey =
+              \(k : Text) -> toMap { authorized_key = AttrValue.AVText k }
           }
           s
 
@@ -185,6 +348,9 @@ let processStateAttrs =
         merge
           { Running   = toMap { running = AttrValue.AVBool True }
           , RunByUser = \(u : Text) -> toMap { user = AttrValue.AVText u }
+          , HasGroup  = \(g : Text)    -> toMap { group = AttrValue.AVText g }
+          , HasArgs   = \(a : Text)    -> toMap { args  = AttrValue.AVText a }
+          , HasCount  = \(n : Natural) -> toMap { count = AttrValue.AVNat n }
           }
           s
 
@@ -203,6 +369,8 @@ let interfaceStateAttrs =
           { Exist          = toMap { exist = AttrValue.AVBool True }
           , HasSpeed       = \(n : Natural) -> toMap { speed = AttrValue.AVNat n }
           , HasIpv4Address = \(a : Text) -> toMap { ipv4_address = AttrValue.AVText a }
+          , Up             = toMap { up = AttrValue.AVBool True }
+          , HasIpv6Address = \(a : Text) -> toMap { ipv6_address = AttrValue.AVText a }
           }
           s
 
@@ -637,6 +805,7 @@ in  { AttrValue         = AttrValue
     , PackageState      = PackageState
     , PortState         = PortState
     , FileState         = FileState
+    , PermissionScope   = PermissionScope
     , CommandState      = CommandState
     , UserState         = UserState
     , GroupState        = GroupState
