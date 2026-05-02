@@ -8,7 +8,7 @@ in  Plan.make Spec.targetBackend
           , Spec.package "nginx" Spec.PackageState.Installed
           , Spec.service "nginx" Spec.ServiceState.Running
           , Spec.service "nginx" Spec.ServiceState.Enabled
-          , Spec.port 80 Spec.PortState.Listening
+          , Spec.port 80 (Spec.PortState.WithProtocol "tcp")
           , Spec.file "/etc/nginx/nginx.conf" Spec.FileState.Exist
           , Spec.file "/var/log/nginx" (Spec.FileState.OwnedBy "nginx")
           , Spec.file "/var/log/nginx" (Spec.FileState.Mode 644)
@@ -58,6 +58,40 @@ in  Plan.make Spec.targetBackend
           , Spec.cgroup "group1"
               ( Spec.CgroupState.HasParameter
                   { name = "cpu.shares", value = "256" }
+              )
+          -- Issue #3 follow-up matchers
+          , Spec.selinuxModule "virt"
+              (Spec.SelinuxModuleState.WithVersion "1.5.0")
+          , Spec.host "example.jp"
+              ( Spec.HostState.ReachableWith
+                  { port = 22, proto = "tcp", timeout = 1 }
+              )
+          , Spec.routingTable
+              ( Spec.RoutingTableState.HasEntryFull
+                  { destination = "192.168.200.0/24"
+                  , gateway     = "192.168.200.1"
+                  , interface   = "eth1"
+                  }
+              )
+          , Spec.windowsFeature "Minesweeper"
+              (Spec.WindowsFeatureState.InstalledBy "dism")
+          , Spec.cron
+              ( Spec.CronState.HasEntryAsUser
+                  { entry = "0 4 * * * /usr/sbin/run_daily_jobs"
+                  , user  = "root"
+                  }
+              )
+          , Spec.x509Certificate "/etc/ssl/cert.pem"
+              ( Spec.X509CertificateState.ValidityInDaysCompare
+                  { op = Spec.CompareOp.Gt, value = 30 }
+              )
+          , Spec.windowsRegistryKey "HKEY_LOCAL_MACHINE\\Some\\Key"
+              ( Spec.WindowsRegistryKeyState.HasProperty
+                  { name = "NumProperty", propertyType = "type_dword" }
+              )
+          , Spec.windowsRegistryKey "HKEY_LOCAL_MACHINE\\Some\\Key"
+              ( Spec.WindowsRegistryKeyState.HasPropertyValue
+                  { name = "NumProperty", propertyType = "type_dword", value = 1 }
               )
           ]
       ]

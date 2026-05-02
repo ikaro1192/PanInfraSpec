@@ -18,6 +18,10 @@ describe command('uname -a') do
   its(:exit_status) { should eq 0 }
 end
 
+describe cron do
+  it { should have_entry('0 4 * * * /usr/sbin/run_daily_jobs').with_user('root') }
+end
+
 describe default_gateway do
   its(:interface) { should eq 'eth0' }
   its(:ipaddress) { should eq '10.0.1.1' }
@@ -42,8 +46,8 @@ describe group('nginx') do
 end
 
 describe host('example.jp') do
+  it { should be_reachable.with(:port => 22, :proto => 'tcp', :timeout => 1) }
   its(:ipaddress) { should eq '192.0.2.1' }
-  it { should be_reachable }
   it { should be_resolvable }
 end
 
@@ -93,7 +97,7 @@ describe package('nginx') do
 end
 
 describe port(80) do
-  it { should be_listening }
+  it { should be_listening.with('tcp') }
 end
 
 describe process('nginx') do
@@ -103,6 +107,7 @@ end
 
 describe routing_table do
   it { should have_entry :destination => '192.168.100.0/24', :gateway => '192.168.100.1' }
+  it { should have_entry :destination => '192.168.200.0/24', :gateway => '192.168.200.1', :interface => 'eth1' }
 end
 
 describe selinux do
@@ -110,8 +115,8 @@ describe selinux do
 end
 
 describe selinux_module('virt') do
+  it { should be_installed.with_version('1.5.0') }
   it { should be_enabled }
-  it { should be_installed }
 end
 
 describe service('nginx') do
@@ -125,4 +130,17 @@ describe user('nginx') do
   it { should have_home_directory '/var/lib/nginx' }
   it { should have_login_shell '/usr/sbin/nologin' }
   it { should have_uid 101 }
+end
+
+describe windows_feature('Minesweeper') do
+  it { should be_installed.by('dism') }
+end
+
+describe windows_registry_key('HKEY_LOCAL_MACHINE\\Some\\Key') do
+  it { should have_property 'NumProperty', :type_dword }
+  it { should have_property_value 'NumProperty', :type_dword, 1 }
+end
+
+describe x509_certificate('/etc/ssl/cert.pem') do
+  its(:validity_in_days) { should be > 30 }
 end

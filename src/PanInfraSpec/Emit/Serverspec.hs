@@ -18,14 +18,16 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Read as TR
 import Numeric.Natural (Natural)
-import Prettyprinter (Doc, indent, pretty, vsep, (<+>))
+import Prettyprinter (Doc, hsep, indent, pretty, punctuate, vsep, (<+>))
 import qualified Prettyprinter as PP
 import Prettyprinter.Render.Text (renderStrict)
 
 import PanInfraSpec.IR
 
 -- | Schema tag for an 'AttrValue'. Used by layer-3 validation only.
-data AttrTag = ATText | ATNat | ATBool
+data AttrTag
+  = ATText | ATNat | ATBool
+  | ATSymbol | ATList | ATRecord | ATCompare
   deriving stock (Eq, Show)
 
 -- | Per-kind allowed @(attrKey, expected tag)@ table. Authoritative source of
@@ -37,7 +39,15 @@ serverspecSchema = Map.fromList
   , ("package", Map.fromList
       [ ("installed", ATBool) ])
   , ("port", Map.fromList
-      [ ("listening", ATBool) ])
+      [ ("listening", ATBool), ("protocol", ATText) ])
+  , ("windows_feature", Map.fromList
+      [ ("installed", ATBool), ("install_method", ATText) ])
+  , ("cron", Map.fromList
+      [ ("entry", ATText), ("entry_user", ATText) ])
+  , ("x509_certificate", Map.fromList
+      [ ("validity_in_days", ATCompare) ])
+  , ("windows_registry_key", Map.fromList
+      [ ("property_args", ATList), ("property_value_args", ATList) ])
   , ("file", Map.fromList
       [ ("exist",        ATBool)
       , ("owned_by",     ATText)
@@ -77,9 +87,10 @@ serverspecSchema = Map.fromList
   , ("default_gateway", Map.fromList
       [ ("ipaddress", ATText), ("interface", ATText) ])
   , ("host", Map.fromList
-      [ ("resolvable", ATBool)
-      , ("reachable",  ATBool)
-      , ("ipaddress",  ATText)
+      [ ("resolvable",     ATBool)
+      , ("reachable",      ATBool)
+      , ("ipaddress",      ATText)
+      , ("reachable_with", ATRecord)
       ])
   , ("ip6tables", Map.fromList [ ("rule", ATText) ])
   , ("ipfilter",  Map.fromList [ ("rule", ATText) ])
@@ -94,6 +105,7 @@ serverspecSchema = Map.fromList
   , ("selinux_module", Map.fromList
       [ ("enabled",   ATBool)
       , ("installed", ATBool)
+      , ("version",   ATText)
       ])
   , ("linux_audit_system", Map.fromList
       [ ("running", ATBool)
@@ -114,25 +126,47 @@ singletonKinds = Set.fromList
   , "routing_table"
   , "selinux"
   , "linux_audit_system"
+  , "cron"
+  ]
+
+-- | For wildcard kinds (those whose schema entry is empty), this table lists
+-- which 'AttrTag's are accepted for any attr key. Defaults to @[ATText]@ when
+-- a kind is not present, preserving the original wildcard behavior.
+wildcardValueTags :: Map Text [AttrTag]
+wildcardValueTags = Map.fromList
+  [ ("routing_table", [ATText, ATRecord])
+  , ("cgroup",        [ATText])
   ]
 
 tagOf :: AttrValue -> AttrTag
 tagOf = \case
-  AVText _ -> ATText
-  AVNat  _ -> ATNat
-  AVBool _ -> ATBool
+  AVText    _   -> ATText
+  AVNat     _   -> ATNat
+  AVBool    _   -> ATBool
+  AVSymbol  _   -> ATSymbol
+  AVList    _   -> ATList
+  AVRecord  _   -> ATRecord
+  AVCompare _ _ -> ATCompare
 
 showTag :: AttrTag -> Text
 showTag = \case
-  ATText -> "Text"
-  ATNat  -> "Natural"
-  ATBool -> "Bool"
+  ATText    -> "Text"
+  ATNat     -> "Natural"
+  ATBool    -> "Bool"
+  ATSymbol  -> "Symbol"
+  ATList    -> "List"
+  ATRecord  -> "Record"
+  ATCompare -> "Compare"
 
 showVal :: AttrValue -> Text
 showVal = \case
-  AVText t -> "AVText " <> t
-  AVNat  n -> "AVNat "  <> T.pack (show n)
-  AVBool b -> "AVBool " <> T.pack (show b)
+  AVText    t   -> "AVText "    <> t
+  AVNat     n   -> "AVNat "     <> T.pack (show n)
+  AVBool    b   -> "AVBool "    <> T.pack (show b)
+  AVSymbol  s   -> "AVSymbol "  <> s
+  AVList    xs  -> "AVList "    <> T.pack (show xs)
+  AVRecord  m   -> "AVRecord "  <> T.pack (show m)
+  AVCompare o v -> "AVCompare " <> T.pack (show (o, v))
 
 -- | Layer-3 validation: kind ∈ schema, attrs non-empty, every attr key ∈
 -- schema for that kind, every attr value's tag matches the expected tag, and
@@ -147,9 +181,12 @@ validateAssertion a@(Assertion k pk attrs) = do
   forM_ (Map.toAscList attrs) $ \(key, val) ->
     if Map.null kindSchema
       then
-        unless (tagOf val == ATText) $
-          Left $ "wildcard kind " <> k <> " requires Text values; got "
-              <> showTag (tagOf val) <> " for key " <> key
+        let allowed = Map.findWithDefault [ATText] k wildcardValueTags
+            actual  = tagOf val
+        in unless (actual `elem` allowed) $
+             Left $ "wildcard kind " <> k <> " accepts "
+                 <> T.intercalate "/" (map showTag allowed)
+                 <> "; got " <> showTag actual <> " for key " <> key
       else do
         expected <- case Map.lookup key kindSchema of
           Just t  -> Right t
@@ -288,6 +325,29 @@ formatItLine "linux_kernel_parameter" "value" (AVText v) =
 -- cgroup (wildcard schema): each attr key is a cgroup parameter name
 formatItLine "cgroup"    key              (AVText v) =
   "its(" <> rubyString key <> ") { should eq " <> rubyString v <> " }"
+-- Issue #3 follow-up matchers (single-key fallbacks; renderAttrs collapses
+-- multi-key compounds before reaching here)
+-- selinux_module.version (compound output if 'installed' sibling, falls back here otherwise)
+formatItLine "selinux_module" "version" (AVText v) =
+  "it { should be_installed.with_version(" <> rubyString v <> ") }"
+-- host.reachable_with (single AVRecord)
+formatItLine "host" "reachable_with" (AVRecord kw) =
+  "it { should be_reachable.with(" <> renderRecordKwargs kw <> ") }"
+-- windows_feature
+formatItLine "windows_feature" "installed"      _          = "it { should be_installed }"
+formatItLine "windows_feature" "install_method" (AVText m) =
+  "it { should be_installed.by(" <> rubyString m <> ") }"
+-- cron
+formatItLine "cron" "entry"      (AVText e) = "it { should have_entry(" <> rubyString e <> ") }"
+formatItLine "cron" "entry_user" (AVText u) = "it { should have_entry.with_user(" <> rubyString u <> ") }"
+-- x509_certificate
+formatItLine "x509_certificate" "validity_in_days" (AVCompare op leaf) =
+  "its(:validity_in_days) { should " <> renderCompareRuby op (renderLeafRuby leaf) <> " }"
+-- windows_registry_key
+formatItLine "windows_registry_key" "property_args" (AVList xs) =
+  "it { should have_property " <> renderArgList xs <> " }"
+formatItLine "windows_registry_key" "property_value_args" (AVList xs) =
+  "it { should have_property_value " <> renderArgList xs <> " }"
 formatItLine k key _ =
   "# UNREACHABLE: unmatched (" <> pretty k <> ", " <> pretty key <> ")"
 
@@ -298,6 +358,116 @@ kindToRubyResource :: Text -> Text
 kindToRubyResource = \case
   "kernel-module" -> "kernel_module"
   k               -> k
+
+-- | Render a single 'AttrLeaf' as a Ruby literal.
+renderLeafRuby :: AttrLeaf -> Doc ann
+renderLeafRuby = \case
+  ALText   t -> rubyString t
+  ALNat    n -> pretty n
+  ALBool   b -> if b then "true" else "false"
+  ALSymbol s -> ":" <> pretty s
+
+-- | Render a record as @:k => v, :k => v@ (Ruby keyword-arg syntax). Used
+-- by @host.be_reachable.with@, @routing_table.have_entry@, etc.
+renderRecordKwargs :: Map Text AttrLeaf -> Doc ann
+renderRecordKwargs m =
+  hsep $ punctuate ","
+    [ ":" <> pretty k <+> "=>" <+> renderLeafRuby v
+    | (k, v) <- Map.toAscList m
+    ]
+
+-- | Render an 'AVList' as a Ruby positional argument list (no surrounding
+-- parens). Used by @windows_registry_key.have_property@ etc.
+renderArgList :: [AttrLeaf] -> Doc ann
+renderArgList xs = hsep $ punctuate "," (map renderLeafRuby xs)
+
+-- | Render a 'CompareOp' applied to a Ruby literal, suitable for the body
+-- of a @should@ block. @OpEq@ becomes @eq N@; the others become @be > N@
+-- etc., matching idiomatic Serverspec/RSpec.
+renderCompareRuby :: CompareOp -> Doc ann -> Doc ann
+renderCompareRuby op v = case op of
+  OpEq -> "eq" <+> v
+  OpLt -> "be" <+> "<"  <+> v
+  OpLe -> "be" <+> "<=" <+> v
+  OpGt -> "be" <+> ">"  <+> v
+  OpGe -> "be" <+> ">=" <+> v
+
+-- | Render the @it { ... }@ lines of a @describe@ block. Indirection over
+-- 'formatItLine' so that compound matchers can fold multiple attribute keys
+-- into a single line by inspecting siblings via @attrs@.
+renderAttrs :: Text -> Map Text AttrValue -> [Doc ann]
+-- port: when @protocol@ is present, collapse it (and any sibling @listening@)
+-- into a single @be_listening.with('proto')@ line. The @listening@ flag is
+-- always implied by specifying a protocol, so it is always consumed here.
+renderAttrs "port" attrs
+  | Just (AVText proto) <- Map.lookup "protocol" attrs
+  = "it { should be_listening.with(" <> rubyString proto <> ") }"
+    : [ formatItLine "port" key val
+      | (key, val) <- Map.toAscList (Map.delete "listening" (Map.delete "protocol" attrs))
+      ]
+-- selinux_module: collapse @{installed, version}@ into
+-- @be_installed.with_version('x.y.z')@.
+renderAttrs "selinux_module" attrs
+  | Just (AVText v) <- Map.lookup "version" attrs
+  = "it { should be_installed.with_version(" <> rubyString v <> ") }"
+    : [ formatItLine "selinux_module" key val
+      | (key, val) <- Map.toAscList
+          (Map.delete "installed" (Map.delete "version" attrs))
+      ]
+-- host: collapse @{reachable, reachable_with}@ into
+-- @be_reachable.with(:port=>22, :proto=>'tcp', ...)@.
+renderAttrs "host" attrs
+  | Just (AVRecord kw) <- Map.lookup "reachable_with" attrs
+  = ("it { should be_reachable.with(" <> renderRecordKwargs kw <> ") }")
+    : [ formatItLine "host" key val
+      | (key, val) <- Map.toAscList
+          (Map.delete "reachable" (Map.delete "reachable_with" attrs))
+      ]
+-- routing_table (wildcard schema): @AVText v@ keeps the existing 2-arg
+-- @{:destination, :gateway}@ output; @AVRecord kw@ allows the 3+-arg form
+-- (e.g. @{:destination, :gateway, :interface}@).
+renderAttrs "routing_table" attrs =
+  [ case val of
+      AVRecord kw -> "it { should have_entry " <> renderRecordKwargs kw <> " }"
+      _           -> formatItLine "routing_table" key val
+  | (key, val) <- Map.toAscList attrs
+  ]
+-- windows_feature: @{installed, install_method}@ collapses into
+-- @be_installed.by('dism')@.
+renderAttrs "windows_feature" attrs
+  | Just (AVText m) <- Map.lookup "install_method" attrs
+  = "it { should be_installed.by(" <> rubyString m <> ") }"
+    : [ formatItLine "windows_feature" key val
+      | (key, val) <- Map.toAscList
+          (Map.delete "installed" (Map.delete "install_method" attrs))
+      ]
+-- cron: @{entry, entry_user}@ collapses into
+-- @have_entry('...').with_user('root')@; @entry@ alone stays single.
+renderAttrs "cron" attrs
+  | Just (AVText e) <- Map.lookup "entry" attrs
+  , Just (AVText u) <- Map.lookup "entry_user" attrs
+  = ["it { should have_entry(" <> rubyString e
+        <> ").with_user(" <> rubyString u <> ") }"]
+  | Just (AVText e) <- Map.lookup "entry" attrs
+  = ["it { should have_entry(" <> rubyString e <> ") }"]
+-- x509_certificate: @AVCompare op (ALNat n)@ becomes @its(:k) { should be > N }@.
+renderAttrs "x509_certificate" attrs
+  | Just (AVCompare op leaf) <- Map.lookup "validity_in_days" attrs
+  = ["its(:validity_in_days) { should "
+        <> renderCompareRuby op (renderLeafRuby leaf) <> " }"]
+-- windows_registry_key: each @AVList@ becomes a positional argument list
+-- after @have_property@ / @have_property_value@.
+renderAttrs "windows_registry_key" attrs =
+  [ case (key, val) of
+      ("property_args", AVList xs) ->
+        "it { should have_property " <> renderArgList xs <> " }"
+      ("property_value_args", AVList xs) ->
+        "it { should have_property_value " <> renderArgList xs <> " }"
+      _ -> formatItLine "windows_registry_key" key val
+  | (key, val) <- Map.toAscList attrs
+  ]
+renderAttrs k attrs =
+  [ formatItLine k key val | (key, val) <- Map.toAscList attrs ]
 
 -- | Render one merged 'Assertion' as a @describe ... do ... end@ block.
 -- Singleton kinds (see 'singletonKinds') drop the @(<primaryKey>)@ argument.
@@ -310,7 +480,7 @@ formatGroup (Assertion k pk attrs) = do
       else do
         hd <- primaryDoc k pk
         Right ("describe" <+> resource <> "(" <> hd <> ")" <+> "do")
-  let body = vsep [ formatItLine k key val | (key, val) <- Map.toAscList attrs ]
+  let body = vsep (renderAttrs k attrs)
   pure $ vsep [header, indent 2 body, "end"]
 
 -- | Render a 'Job' as a @(filename, content)@ pair.

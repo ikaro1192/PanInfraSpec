@@ -166,7 +166,7 @@ matching `*State` union.
 |---|---|---|
 | Service | `service : Text -> ServiceState -> Assertion` | `Running`, `Enabled` |
 | Package | `package : Text -> PackageState -> Assertion` | `Installed` |
-| Port | `port : Natural -> PortState -> Assertion` | `Listening` |
+| Port | `port : Natural -> PortState -> Assertion` | `Listening`, `WithProtocol : Text` |
 | Command | `command : Text -> CommandState -> Assertion` | `ExitCode : Natural` |
 | File | `file : Text -> FileState -> Assertion` | `Exist`, `OwnedBy : Text`, `GroupedInto : Text`, `Mode : Natural`, `Contains : Text` |
 | User | `user : Text -> UserState -> Assertion` | `Exist`, `HasUid : Natural`, `BelongsToGroup : Text`, `HasHomeDirectory : Text`, `HasLoginShell : Text` |
