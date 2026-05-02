@@ -86,6 +86,22 @@ serverspecSchema = Map.fromList
   , ("ipnat",     Map.fromList [ ("rule", ATText) ])
   , ("iptables",  Map.fromList [ ("rule", ATText) ])
   , ("routing_table", Map.empty)  -- wildcard kind: any AVText key allowed
+  , ("selinux", Map.fromList
+      [ ("enforcing",  ATBool)
+      , ("permissive", ATBool)
+      , ("disabled",   ATBool)
+      ])
+  , ("selinux_module", Map.fromList
+      [ ("enabled",   ATBool)
+      , ("installed", ATBool)
+      ])
+  , ("linux_audit_system", Map.fromList
+      [ ("running", ATBool)
+      , ("enabled", ATBool)
+      ])
+  , ("linux_kernel_parameter", Map.fromList
+      [ ("value", ATText) ])
+  , ("cgroup", Map.empty)  -- wildcard kind: dynamic parameter names
   ]
 
 -- | Kinds whose @describe@ block takes no primary-key argument
@@ -93,7 +109,12 @@ serverspecSchema = Map.fromList
 -- kinds takes no @Text@ argument and stores the kind name as @primaryKey@ to
 -- satisfy layer-2 non-empty validation.
 singletonKinds :: Set Text
-singletonKinds = Set.fromList ["default_gateway", "routing_table"]
+singletonKinds = Set.fromList
+  [ "default_gateway"
+  , "routing_table"
+  , "selinux"
+  , "linux_audit_system"
+  ]
 
 tagOf :: AttrValue -> AttrTag
 tagOf = \case
@@ -251,6 +272,22 @@ formatItLine "iptables"  "rule"           (AVText r) = "it { should have_rule " 
 formatItLine "routing_table" key          (AVText v) =
   "it { should have_entry :destination => " <> rubyString key
     <> ", :gateway => " <> rubyString v <> " }"
+-- selinux (singleton): three mutually exclusive states
+formatItLine "selinux"   "enforcing"      _          = "it { should be_enforcing }"
+formatItLine "selinux"   "permissive"     _          = "it { should be_permissive }"
+formatItLine "selinux"   "disabled"       _          = "it { should be_disabled }"
+-- selinux_module
+formatItLine "selinux_module" "enabled"   _          = "it { should be_enabled }"
+formatItLine "selinux_module" "installed" _          = "it { should be_installed }"
+-- linux_audit_system (singleton)
+formatItLine "linux_audit_system" "running" _        = "it { should be_running }"
+formatItLine "linux_audit_system" "enabled" _        = "it { should be_enabled }"
+-- linux_kernel_parameter
+formatItLine "linux_kernel_parameter" "value" (AVText v) =
+  "its(:value) { should eq " <> rubyString v <> " }"
+-- cgroup (wildcard schema): each attr key is a cgroup parameter name
+formatItLine "cgroup"    key              (AVText v) =
+  "its(" <> rubyString key <> ") { should eq " <> rubyString v <> " }"
 formatItLine k key _ =
   "# UNREACHABLE: unmatched (" <> pretty k <> ", " <> pretty key <> ")"
 

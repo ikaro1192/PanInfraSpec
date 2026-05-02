@@ -48,5 +48,16 @@ in  Plan.make Spec.targetBackend
                   , gateway     = "192.168.100.1"
                   }
               )
+          , Spec.selinux Spec.SelinuxState.Enforcing
+          , Spec.selinuxModule "virt" Spec.SelinuxModuleState.Installed
+          , Spec.selinuxModule "virt" Spec.SelinuxModuleState.Enabled
+          , Spec.linuxAuditSystem Spec.LinuxAuditSystemState.Running
+          , Spec.linuxAuditSystem Spec.LinuxAuditSystemState.Enabled
+          , Spec.linuxKernelParameter "net.ipv4.ip_forward"
+              (Spec.LinuxKernelParameterState.HasValue "1")
+          , Spec.cgroup "group1"
+              ( Spec.CgroupState.HasParameter
+                  { name = "cpu.shares", value = "256" }
+              )
           ]
       ]
