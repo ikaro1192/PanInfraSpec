@@ -12,6 +12,8 @@ import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Read as TR
@@ -68,7 +70,30 @@ serverspecSchema = Map.fromList
       ])
   , ("kernel-module", Map.fromList
       [ ("loaded", ATBool) ])
+  , ("bond", Map.fromList
+      [ ("exist", ATBool), ("interface", ATText) ])
+  , ("bridge", Map.fromList
+      [ ("exist", ATBool), ("interface", ATText) ])
+  , ("default_gateway", Map.fromList
+      [ ("ipaddress", ATText), ("interface", ATText) ])
+  , ("host", Map.fromList
+      [ ("resolvable", ATBool)
+      , ("reachable",  ATBool)
+      , ("ipaddress",  ATText)
+      ])
+  , ("ip6tables", Map.fromList [ ("rule", ATText) ])
+  , ("ipfilter",  Map.fromList [ ("rule", ATText) ])
+  , ("ipnat",     Map.fromList [ ("rule", ATText) ])
+  , ("iptables",  Map.fromList [ ("rule", ATText) ])
+  , ("routing_table", Map.empty)  -- wildcard kind: any AVText key allowed
   ]
+
+-- | Kinds whose @describe@ block takes no primary-key argument
+-- (e.g. @describe selinux do ... end@). The Dhall smart constructor for these
+-- kinds takes no @Text@ argument and stores the kind name as @primaryKey@ to
+-- satisfy layer-2 non-empty validation.
+singletonKinds :: Set Text
+singletonKinds = Set.fromList ["default_gateway", "routing_table"]
 
 tagOf :: AttrValue -> AttrTag
 tagOf = \case
@@ -98,14 +123,20 @@ validateAssertion a@(Assertion k pk attrs) = do
     Nothing -> Left ("unknown kind for serverspec: " <> k)
   when (Map.null attrs) $
     Left ("empty attrs for kind " <> k)
-  forM_ (Map.toAscList attrs) $ \(key, val) -> do
-    expected <- case Map.lookup key kindSchema of
-      Just t  -> Right t
-      Nothing -> Left ("unknown attrs key for kind " <> k <> ": " <> key)
-    let actual = tagOf val
-    unless (actual == expected) $
-      Left $ "wrong attr type for " <> k <> "." <> key
-          <> ": expected " <> showTag expected <> ", got " <> showTag actual
+  forM_ (Map.toAscList attrs) $ \(key, val) ->
+    if Map.null kindSchema
+      then
+        unless (tagOf val == ATText) $
+          Left $ "wildcard kind " <> k <> " requires Text values; got "
+              <> showTag (tagOf val) <> " for key " <> key
+      else do
+        expected <- case Map.lookup key kindSchema of
+          Just t  -> Right t
+          Nothing -> Left ("unknown attrs key for kind " <> k <> ": " <> key)
+        let actual = tagOf val
+        unless (actual == expected) $
+          Left $ "wrong attr type for " <> k <> "." <> key
+              <> ": expected " <> showTag expected <> ", got " <> showTag actual
   when (k == "port") $
     case TR.decimal pk :: Either String (Natural, Text) of
       Right (_, rest) | T.null rest -> Right ()
@@ -198,6 +229,28 @@ formatItLine "interface" "speed"          (AVNat n)  = "its(:speed) { should eq 
 formatItLine "interface" "ipv4_address"   (AVText a) = "it { should have_ipv4_address " <> rubyString a <> " }"
 -- kernel-module
 formatItLine "kernel-module" "loaded"     _          = "it { should be_loaded }"
+-- bond
+formatItLine "bond"      "exist"          _          = "it { should exist }"
+formatItLine "bond"      "interface"      (AVText i) = "it { should have_interface " <> rubyString i <> " }"
+-- bridge
+formatItLine "bridge"    "exist"          _          = "it { should exist }"
+formatItLine "bridge"    "interface"      (AVText i) = "it { should have_interface " <> rubyString i <> " }"
+-- default_gateway (singleton)
+formatItLine "default_gateway" "ipaddress" (AVText a) = "its(:ipaddress) { should eq " <> rubyString a <> " }"
+formatItLine "default_gateway" "interface" (AVText i) = "its(:interface) { should eq " <> rubyString i <> " }"
+-- host
+formatItLine "host"      "resolvable"     _          = "it { should be_resolvable }"
+formatItLine "host"      "reachable"      _          = "it { should be_reachable }"
+formatItLine "host"      "ipaddress"      (AVText a) = "its(:ipaddress) { should eq " <> rubyString a <> " }"
+-- iptables family
+formatItLine "ip6tables" "rule"           (AVText r) = "it { should have_rule " <> rubyString r <> " }"
+formatItLine "ipfilter"  "rule"           (AVText r) = "it { should have_rule " <> rubyString r <> " }"
+formatItLine "ipnat"     "rule"           (AVText r) = "it { should have_rule " <> rubyString r <> " }"
+formatItLine "iptables"  "rule"           (AVText r) = "it { should have_rule " <> rubyString r <> " }"
+-- routing_table (wildcard schema, singleton): mapKey = destination CIDR, mapValue = gateway
+formatItLine "routing_table" key          (AVText v) =
+  "it { should have_entry :destination => " <> rubyString key
+    <> ", :gateway => " <> rubyString v <> " }"
 formatItLine k key _ =
   "# UNREACHABLE: unmatched (" <> pretty k <> ", " <> pretty key <> ")"
 
@@ -210,12 +263,17 @@ kindToRubyResource = \case
   k               -> k
 
 -- | Render one merged 'Assertion' as a @describe ... do ... end@ block.
+-- Singleton kinds (see 'singletonKinds') drop the @(<primaryKey>)@ argument.
 formatGroup :: Assertion -> Either Text (Doc ann)
 formatGroup (Assertion k pk attrs) = do
-  hd <- primaryDoc k pk
   let resource = pretty (kindToRubyResource k)
-      header = "describe" <+> resource <> "(" <> hd <> ")" <+> "do"
-      body   = vsep [ formatItLine k key val | (key, val) <- Map.toAscList attrs ]
+  header <-
+    if Set.member k singletonKinds
+      then Right ("describe" <+> resource <+> "do")
+      else do
+        hd <- primaryDoc k pk
+        Right ("describe" <+> resource <> "(" <> hd <> ")" <+> "do")
+  let body = vsep [ formatItLine k key val | (key, val) <- Map.toAscList attrs ]
   pure $ vsep [header, indent 2 body, "end"]
 
 -- | Render a 'Job' as a @(filename, content)@ pair.

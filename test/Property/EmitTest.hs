@@ -3,7 +3,7 @@ module Property.EmitTest (tests) where
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as T
-import Test.QuickCheck (Gen, choose, elements, listOf, property, vectorOf)
+import Test.QuickCheck (Gen, choose, elements, listOf, oneof, property, vectorOf)
 import Test.Tasty
 import Test.Tasty.QuickCheck (testProperty, counterexample, forAll, Property)
 
@@ -25,12 +25,28 @@ dummyNode = Node
   , tags     = []
   }
 
--- | Pick one schema-allowed @(kind, attrKey, AttrTag)@ triple.
+-- | Pick one schema-allowed @(kind, attrKey, AttrTag)@ triple. Wildcard kinds
+-- (empty attr schema) are excluded — they have no enumerable @(key, tag)@
+-- pairs and are exercised by 'genWildcardAssertion' instead.
 genKindKeyTag :: Gen (Text, Text, AttrTag)
 genKindKeyTag = do
-  (kind, attrSchema) <- elements (Map.toAscList serverspecSchema)
+  let enumerable =
+        [ (kind, attrs)
+        | (kind, attrs) <- Map.toAscList serverspecSchema
+        , not (Map.null attrs)
+        ]
+  (kind, attrSchema) <- elements enumerable
   (key, tag)         <- elements (Map.toAscList attrSchema)
   pure (kind, key, tag)
+
+-- | List of wildcard-schema kinds (empty attr map). For these, any AVText key
+-- is accepted by the validator.
+wildcardKinds :: [Text]
+wildcardKinds =
+  [ kind
+  | (kind, attrs) <- Map.toAscList serverspecSchema
+  , Map.null attrs
+  ]
 
 -- | Generate an 'AttrValue' matching the given 'AttrTag'.
 genValue :: AttrTag -> Gen AttrValue
@@ -49,12 +65,28 @@ genPrimaryKey :: Text -> Gen Text
 genPrimaryKey "port" = T.pack . show <$> choose (1 :: Int, 65535)
 genPrimaryKey _      = T.pack <$> shortAlphaNum
 
--- | Generate an Assertion that satisfies the Serverspec schema.
+-- | Generate an Assertion that satisfies the Serverspec schema. Mixes
+-- enumerable-schema kinds with wildcard-schema kinds so both code paths in
+-- the emitter are exercised.
 genValidAssertion :: Gen Assertion
-genValidAssertion = do
+genValidAssertion
+  | null wildcardKinds = genEnumerableAssertion
+  | otherwise          = oneof [genEnumerableAssertion, genWildcardAssertion]
+
+genEnumerableAssertion :: Gen Assertion
+genEnumerableAssertion = do
   (kind, key, tag) <- genKindKeyTag
   pk               <- genPrimaryKey kind
   val              <- genValue tag
+  pure (Assertion kind pk (Map.singleton key val))
+
+-- | Wildcard-kind assertion: dynamic attr key, AVText value.
+genWildcardAssertion :: Gen Assertion
+genWildcardAssertion = do
+  kind <- elements wildcardKinds
+  pk   <- genPrimaryKey kind
+  key  <- T.pack <$> shortAlphaNum
+  val  <- AVText . T.pack <$> shortAlphaNum
   pure (Assertion kind pk (Map.singleton key val))
 
 -- | Two assertions sharing @(kind, primaryKey, attrKey)@ but disagreeing on

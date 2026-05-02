@@ -53,6 +53,27 @@ let InterfaceState =
       >
 let KernelModuleState = < Loaded >
 
+-- PR-1 network resources -----------------------------------------------------
+
+let BondState   = < Exist | HasInterface : Text >
+let BridgeState = < Exist | HasInterface : Text >
+let DefaultGatewayState =
+      < HasIpaddress : Text
+      | HasInterface : Text
+      >
+let HostState =
+      < Resolvable
+      | Reachable
+      | HasIpaddress : Text
+      >
+let Ip6tablesState = < HasRule : Text >
+let IpfilterState  = < HasRule : Text >
+let IpnatState     = < HasRule : Text >
+let IptablesState  = < HasRule : Text >
+let RoutingTableState =
+      < HasEntry : { destination : Text, gateway : Text } >
+
+
 -- Attribute encoders --------------------------------------------------------
 
 let serviceStateAttrs =
@@ -136,6 +157,78 @@ let interfaceStateAttrs =
 let kernelModuleStateAttrs =
       \(_ : KernelModuleState) -> toMap { loaded = AttrValue.AVBool True }
 
+let bondStateAttrs =
+      \(s : BondState) ->
+        merge
+          { Exist        = toMap { exist = AttrValue.AVBool True }
+          , HasInterface = \(i : Text) -> toMap { interface = AttrValue.AVText i }
+          }
+          s
+
+let bridgeStateAttrs =
+      \(s : BridgeState) ->
+        merge
+          { Exist        = toMap { exist = AttrValue.AVBool True }
+          , HasInterface = \(i : Text) -> toMap { interface = AttrValue.AVText i }
+          }
+          s
+
+let defaultGatewayStateAttrs =
+      \(s : DefaultGatewayState) ->
+        merge
+          { HasIpaddress = \(a : Text) -> toMap { ipaddress = AttrValue.AVText a }
+          , HasInterface = \(i : Text) -> toMap { interface = AttrValue.AVText i }
+          }
+          s
+
+let hostStateAttrs =
+      \(s : HostState) ->
+        merge
+          { Resolvable   = toMap { resolvable = AttrValue.AVBool True }
+          , Reachable    = toMap { reachable  = AttrValue.AVBool True }
+          , HasIpaddress = \(a : Text) -> toMap { ipaddress = AttrValue.AVText a }
+          }
+          s
+
+let ip6tablesStateAttrs =
+      \(s : Ip6tablesState) ->
+        merge
+          { HasRule = \(r : Text) -> toMap { rule = AttrValue.AVText r } }
+          s
+
+let ipfilterStateAttrs =
+      \(s : IpfilterState) ->
+        merge
+          { HasRule = \(r : Text) -> toMap { rule = AttrValue.AVText r } }
+          s
+
+let ipnatStateAttrs =
+      \(s : IpnatState) ->
+        merge
+          { HasRule = \(r : Text) -> toMap { rule = AttrValue.AVText r } }
+          s
+
+let iptablesStateAttrs =
+      \(s : IptablesState) ->
+        merge
+          { HasRule = \(r : Text) -> toMap { rule = AttrValue.AVText r } }
+          s
+
+-- routing_table is a wildcard kind: each HasEntry produces one (destination,
+-- gateway) attribute pair, where the destination becomes the dynamic mapKey.
+-- toMap cannot be used here because the field name is value-dependent.
+let routingTableStateAttrs =
+      \(s : RoutingTableState) ->
+        merge
+          { HasEntry =
+              \(e : { destination : Text, gateway : Text }) ->
+                [ { mapKey = e.destination
+                  , mapValue = AttrValue.AVText e.gateway
+                  }
+                ]
+          }
+          s
+
 -- Smart constructors --------------------------------------------------------
 
 let service
@@ -204,6 +297,69 @@ let kernelModule
       \(s : KernelModuleState) ->
         { kind = "kernel-module", primaryKey = name, attrs = kernelModuleStateAttrs s }
 
+let bond
+    : Text -> BondState -> Assertion
+    = \(name : Text) ->
+      \(s : BondState) ->
+        { kind = "bond", primaryKey = name, attrs = bondStateAttrs s }
+
+let bridge
+    : Text -> BridgeState -> Assertion
+    = \(name : Text) ->
+      \(s : BridgeState) ->
+        { kind = "bridge", primaryKey = name, attrs = bridgeStateAttrs s }
+
+-- defaultGateway is a singleton: takes no Text argument; primaryKey is fixed
+-- to the kind name to satisfy non-empty validation. The emitter omits the
+-- (<primaryKey>) argument from the generated `describe` block.
+let defaultGateway
+    : DefaultGatewayState -> Assertion
+    = \(s : DefaultGatewayState) ->
+        { kind = "default_gateway"
+        , primaryKey = "default_gateway"
+        , attrs = defaultGatewayStateAttrs s
+        }
+
+let host
+    : Text -> HostState -> Assertion
+    = \(name : Text) ->
+      \(s : HostState) ->
+        { kind = "host", primaryKey = name, attrs = hostStateAttrs s }
+
+let ip6tables
+    : Text -> Ip6tablesState -> Assertion
+    = \(table : Text) ->
+      \(s : Ip6tablesState) ->
+        { kind = "ip6tables", primaryKey = table, attrs = ip6tablesStateAttrs s }
+
+let ipfilter
+    : Text -> IpfilterState -> Assertion
+    = \(label : Text) ->
+      \(s : IpfilterState) ->
+        { kind = "ipfilter", primaryKey = label, attrs = ipfilterStateAttrs s }
+
+let ipnat
+    : Text -> IpnatState -> Assertion
+    = \(label : Text) ->
+      \(s : IpnatState) ->
+        { kind = "ipnat", primaryKey = label, attrs = ipnatStateAttrs s }
+
+let iptables
+    : Text -> IptablesState -> Assertion
+    = \(table : Text) ->
+      \(s : IptablesState) ->
+        { kind = "iptables", primaryKey = table, attrs = iptablesStateAttrs s }
+
+-- routingTable is a singleton (no primary key); each HasEntry attaches one
+-- destination/gateway pair to the same describe block.
+let routingTable
+    : RoutingTableState -> Assertion
+    = \(s : RoutingTableState) ->
+        { kind = "routing_table"
+        , primaryKey = "routing_table"
+        , attrs = routingTableStateAttrs s
+        }
+
 in  { AttrValue         = AttrValue
     , Assertion         = Assertion
     , ServiceState      = ServiceState
@@ -217,6 +373,15 @@ in  { AttrValue         = AttrValue
     , MountState        = MountState
     , InterfaceState    = InterfaceState
     , KernelModuleState = KernelModuleState
+    , BondState           = BondState
+    , BridgeState         = BridgeState
+    , DefaultGatewayState = DefaultGatewayState
+    , HostState           = HostState
+    , Ip6tablesState      = Ip6tablesState
+    , IpfilterState       = IpfilterState
+    , IpnatState          = IpnatState
+    , IptablesState       = IptablesState
+    , RoutingTableState   = RoutingTableState
     , service           = service
     , package           = package
     , port              = port
@@ -228,5 +393,14 @@ in  { AttrValue         = AttrValue
     , mount             = mount
     , interface         = interface
     , kernelModule      = kernelModule
+    , bond              = bond
+    , bridge            = bridge
+    , defaultGateway    = defaultGateway
+    , host              = host
+    , ip6tables         = ip6tables
+    , ipfilter          = ipfilter
+    , ipnat             = ipnat
+    , iptables          = iptables
+    , routingTable      = routingTable
     , targetBackend     = "serverspec"
     }
