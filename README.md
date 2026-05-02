@@ -1,4 +1,8 @@
 # PanInfraSpec
+[![CI](https://github.com/ikaro1192/PanInfraSpec/actions/workflows/ci.yml/badge.svg)](https://github.com/ikaro1192/PanInfraSpec/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/ikaro1192/PanInfraSpec)](https://github.com/ikaro1192/PanInfraSpec/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Haskell](https://img.shields.io/badge/language-Haskell-5D4F85)](https://www.haskell.org/)
 
 PanInfraSpec is a typed front-end for [Serverspec](https://serverspec.org/).
 You describe your nodes and the assertions they should satisfy in
