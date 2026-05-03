@@ -1,6 +1,5 @@
 -- dhall/Inventory.dhall
 -- Backend-agnostic prelude for the inventory.
--- See specification.md §3.1.
 
 let Role = Text  -- organisations have different role vocabularies; keep as Text wrapper
 

@@ -1,6 +1,6 @@
 -- dhall/Plan.dhall
 -- Selector and Mapping prelude. Backend-agnostic in shape, but pulls Assertion
--- from the chosen backend prelude. See specification.md §3.3.
+-- from the chosen backend prelude.
 
 let Selector =
       < SelAll

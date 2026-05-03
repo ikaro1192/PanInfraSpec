@@ -32,13 +32,14 @@ import PanInfraSpec.SoT (toNodes)
 import PanInfraSpec.SoT.Terraform (TerraformStateFile (..))
 
 -- | Source of @[Node]@ data. The parser is built with @<|>@ so adding new
--- adapters in later phases stays additive (specification.md §6.2.1).
+-- adapters in later phases stays additive.
 --
 -- The CLI flag for 'FromTerraformState' is @--from-terraform-state PATH@
--- (single token). The spec sketch in §7.2 shows @--from terraform-state PATH@
--- (two tokens), but optparse-applicative's applicative parser cannot dispatch
--- on the value of a previously-parsed flag, so we collapse to a single
--- token. Each future adapter gets its own dedicated @--from-<adapter>@ flag.
+-- (single token). An earlier @--from terraform-state PATH@ (two-token) form
+-- was considered, but optparse-applicative's applicative parser cannot
+-- dispatch on the value of a previously-parsed flag, so we collapse to a
+-- single token. Each future adapter gets its own dedicated @--from-<adapter>@
+-- flag.
 data InventorySource
   = FromDhall          FilePath
   | FromTerraformState FilePath
@@ -188,8 +189,8 @@ run opts@Options{..} = do
                            Right outs -> writeAll optOut outs
 
 -- | Layer-1 check: the @--target@ flag must match the @targetBackend@ field
--- the plan file forwards from its imported per-backend Dhall prelude
--- (specification.md §6.2). Returning @Left@ here is mapped to exit 2 by 'die'.
+-- the plan file forwards from its imported per-backend Dhall prelude.
+-- Returning @Left@ here is mapped to exit 2 by 'die'.
 checkTargetMatches :: Text -> PlanFile -> Either Text ()
 checkTargetMatches t pf
   | t == pfTargetBackend pf = Right ()

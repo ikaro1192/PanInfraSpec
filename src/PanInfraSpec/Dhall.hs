@@ -19,8 +19,7 @@ loadInventory = Dhall.inputFile Dhall.auto
 
 -- | Load the plan file via Dhall and decode to a 'PlanFile' record. The
 -- record carries @targetBackend@ forwarded from the imported per-backend
--- prelude so the CLI can compare it against @--target@ (specification.md
--- §6.2).
+-- prelude so the CLI can compare it against @--target@.
 loadPlan :: FilePath -> IO PlanFile
 loadPlan = Dhall.inputFile Dhall.auto
 
@@ -30,7 +29,7 @@ knownBackends = ["serverspec"]
 
 -- | Allowed @aKind@ values per backend. Acts as the layer-2 defence against
 -- Smart Constructor 迂回 (a user hand-writing an Assertion record bypassing
--- the Dhall smart constructors). See specification.md §4.3.
+-- the Dhall smart constructors).
 backendAllowedKinds :: Text -> [Text]
 backendAllowedKinds = \case
   "serverspec" ->
