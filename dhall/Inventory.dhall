@@ -3,13 +3,20 @@
 
 let Role = Text  -- organisations have different role vocabularies; keep as Text wrapper
 
-let Node =
-      { hostname : Text
-      , ip       : Optional Text
-      , role     : Role
-      , tags     : List Text
+let CustomAttribute =
+      { name    : Text
+      , command : Text
       }
 
-in  { Role = Role
-    , Node = Node
+let Node =
+      { hostname         : Text
+      , ip               : Optional Text
+      , role             : Role
+      , tags             : List Text
+      , customAttributes : List CustomAttribute
+      }
+
+in  { Role             = Role
+    , CustomAttribute  = CustomAttribute
+    , Node             = Node
     }

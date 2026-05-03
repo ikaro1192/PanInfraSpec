@@ -55,7 +55,7 @@ tests = testGroup "Layout"
   ]
 
 mkNode :: Text -> Text -> Node
-mkNode h r = Node h Nothing (Role r) []
+mkNode h r = Node h Nothing (Role r) [] []
 
 -- | Smallest assertion that survives layer-3 validation: a uname command
 -- check. Used so the focus stays on the layout / collision behaviour rather
@@ -66,7 +66,7 @@ pingAssertion = Assertion "command" "uname -a"
 
 nodeFnDhall :: Text
 nodeFnDhall =
-  "\\(n : { hostname : Text, ip : Optional Text, role : Text, tags : List Text }) \
+  "\\(n : { hostname : Text, ip : Optional Text, role : Text, tags : List Text, customAttributes : List { name : Text, command : Text } }) \
   \-> \"${n.role}/${n.hostname}_spec.rb\""
 
 assertLeftContains :: Show a => Text -> Either Text a -> IO ()

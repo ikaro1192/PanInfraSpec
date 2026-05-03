@@ -22,10 +22,11 @@ tests = testGroup "synthetic"
 synthInventory :: [Node]
 synthInventory =
   [ Node
-      { hostname = "h" <> T.pack (show i)
-      , ip       = Just ("10.0." <> T.pack (show (i `div` 50)) <> "." <> T.pack (show (i `mod` 50)))
-      , role     = roleFor i
-      , tags     = if even i then ["metrics"] else []
+      { hostname         = "h" <> T.pack (show i)
+      , ip               = Just ("10.0." <> T.pack (show (i `div` 50)) <> "." <> T.pack (show (i `mod` 50)))
+      , role             = roleFor i
+      , tags             = if even i then ["metrics"] else []
+      , customAttributes = []
       }
   | i <- [1 .. 100 :: Int]
   ]

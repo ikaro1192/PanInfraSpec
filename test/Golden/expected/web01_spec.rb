@@ -1,5 +1,9 @@
 require 'spec_helper'
 
+paninfraspec_total_ram_kb = Specinfra.backend.run_command('awk \'/MemTotal/ {print $2}\' /proc/meminfo').stdout.strip
+paninfraspec_max_mem_mb = Specinfra.backend.run_command('echo 256').stdout.strip
+paninfraspec_min_cert_days = Specinfra.backend.run_command('echo 30').stdout.strip
+
 describe bond('bond0') do
   it { should exist }
   it { should have_interface 'eth0' }
@@ -180,6 +184,10 @@ describe mysql_config('innodb-buffer-pool-size') do
   its(:value) { should be > 100000000 }
 end
 
+describe mysql_config('innodb_buffer_pool_size_bytes') do
+  its(:value) { should be > paninfraspec_total_ram_kb.to_i * 1024 * 70 / 100 }
+end
+
 describe mysql_config('socket') do
   its(:value) { should eq '/tmp/mysql.sock' }
 end
@@ -198,6 +206,10 @@ end
 
 describe php_config('mbstring.http_output_conv_mimetypes') do
   its(:value) { should match /application/ }
+end
+
+describe php_config('memory_limit_mb') do
+  its(:value) { should be <= paninfraspec_max_mem_mb.to_i }
 end
 
 describe php_config('session.cache_expire') do
@@ -264,6 +276,10 @@ end
 
 describe x509_certificate('/etc/ssl/cert.pem') do
   its(:validity_in_days) { should be > 30 }
+end
+
+describe x509_certificate('/etc/ssl/server.crt') do
+  its(:validity_in_days) { should be >= paninfraspec_min_cert_days.to_i }
 end
 
 describe x509_private_key('/my/private/server-key.pem') do

@@ -6,6 +6,7 @@ module PanInfraSpec.Emit.Serverspec
   ) where
 
 import Control.Monad (foldM, forM_, unless, when)
+import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
 import Data.Function (on)
 import Data.List (groupBy, sortOn)
 import Data.List.NonEmpty (NonEmpty (..))
@@ -564,11 +565,12 @@ kindToRubyResource = \case
 -- | Render a single 'AttrLeaf' as a Ruby literal.
 renderLeafRuby :: AttrLeaf -> Doc ann
 renderLeafRuby = \case
-  ALText   t -> rubyString t
-  ALNat    n -> pretty n
-  ALBool   b -> if b then "true" else "false"
-  ALSymbol s -> ":" <> pretty s
-  ALRegex  p -> "/" <> pretty p <> "/"
+  ALText     t -> rubyString t
+  ALNat      n -> pretty n
+  ALBool     b -> if b then "true" else "false"
+  ALSymbol   s -> ":" <> pretty s
+  ALRegex    p -> "/" <> pretty p <> "/"
+  ALRubyExpr e -> pretty e
 
 -- | Render a record as @:k => v, :k => v@ (Ruby keyword-arg syntax). Used
 -- by @host.be_reachable.with@, @routing_table.have_entry@, etc.
@@ -874,18 +876,74 @@ formatGroup (Assertion k pk attrs0) = do
   let body = vsep (renderAttrs k attrs)
   pure $ vsep [header, indent 2 body, "end"]
 
+-- | Validate the @customAttributes@ list of a 'Node' before emitting any
+-- @paninfraspec_<name> = ...@ preamble lines. Rejects:
+--
+--   * empty names or empty commands (both would produce broken Ruby);
+--   * names that are not valid Ruby local-variable identifiers
+--     (regex equivalent: @^[a-z_][a-zA-Z0-9_]*$@) — anything else would make
+--     the generated @.rb@ file fail with @SyntaxError@ at runtime;
+--   * duplicate names within the same node.
+--
+-- Returns the input list unchanged on success so callers can keep using the
+-- declaration order.
+validateCustomAttributes :: [CustomAttribute] -> Either Text [CustomAttribute]
+validateCustomAttributes cas = do
+  forM_ cas $ \ca -> do
+    when (T.null (caName ca)) $
+      Left "customAttribute name must be non-empty"
+    when (T.null (caCommand ca)) $
+      Left ("customAttribute command must be non-empty for: " <> caName ca)
+    unless (isValidRubyLocal (caName ca)) $
+      Left ("customAttribute name must be a valid Ruby local variable identifier: "
+              <> caName ca)
+  let names = map caName cas
+      seen  = foldr collect (Right Set.empty) names
+  case seen of
+    Left dup -> Left ("duplicate customAttribute name: " <> dup)
+    Right _  -> Right cas
+  where
+    collect _ (Left e)        = Left e
+    collect n (Right s)
+      | n `Set.member` s = Left n
+      | otherwise        = Right (Set.insert n s)
+
+    isValidRubyLocal :: Text -> Bool
+    isValidRubyLocal t = case T.uncons t of
+      Nothing      -> False
+      Just (c, cs) ->
+        (isAsciiLower c || c == '_')
+          && T.all isIdentTail cs
+      where
+        isIdentTail c = isAsciiLower c || isAsciiUpper c || isDigit c || c == '_'
+
+-- | Render the preamble block placed between @require 'spec_helper'@ and the
+-- first @describe@: one Ruby variable assignment per validated
+-- 'CustomAttribute'.
+renderCustomAttributePreamble :: [CustomAttribute] -> Doc ann
+renderCustomAttributePreamble cas = vsep
+  [ "paninfraspec_" <> pretty (caName ca)
+      <+> "=" <+> "Specinfra.backend.run_command(" <> rubyString (caCommand ca) <> ").stdout.strip"
+  | ca <- cas
+  ]
+
 -- | Render a 'Job' as a @(filename, content)@ pair. The filename comes from
 -- the Layout's 'lSpecPath' applied to the node, then validated to make sure
 -- the user's Dhall function did not produce something that would write
 -- outside the @--out@ directory.
 formatJob :: Layout -> Job -> Either Text (FilePath, Text)
 formatJob layout (Job node assertions) = do
-  validated <- traverse validateAssertion assertions
-  merged    <- traverse mergeGroup (groupAssertions validated)
-  blocks    <- traverse formatGroup merged
-  filename  <- validateLayoutPath (T.unpack (lSpecPath layout node))
+  validatedCAs <- validateCustomAttributes (customAttributes node)
+  validated    <- traverse validateAssertion assertions
+  merged       <- traverse mergeGroup (groupAssertions validated)
+  blocks       <- traverse formatGroup merged
+  filename     <- validateLayoutPath (T.unpack (lSpecPath layout node))
   let docText d = renderStrict (PP.layoutPretty PP.defaultLayoutOptions d)
-      body      = T.intercalate "\n\n" ("require 'spec_helper'" : map docText blocks)
+      preambleLines
+        | null validatedCAs = []
+        | otherwise         = [docText (renderCustomAttributePreamble validatedCAs)]
+      body = T.intercalate "\n\n"
+               ("require 'spec_helper'" : preambleLines ++ map docText blocks)
   pure (filename, body <> "\n")
 
 -- | Static @spec_helper.rb@ produced alongside each output set. Uses the

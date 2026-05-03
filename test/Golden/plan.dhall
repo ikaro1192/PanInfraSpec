@@ -85,6 +85,13 @@ in  Plan.make Spec.targetBackend
               ( Spec.X509CertificateState.ValidityInDaysCompare
                   { op = Spec.CompareOp.Gt, value = 30 }
               )
+          -- ValidityInDaysCompareExpr: dynamic threshold via expand_attr.
+          , Spec.x509Certificate "/etc/ssl/server.crt"
+              ( Spec.X509CertificateState.ValidityInDaysCompareExpr
+                  { op    = Spec.CompareOp.Ge
+                  , value = Spec.expand_attr "min_cert_days" ++ ".to_i"
+                  }
+              )
           , Spec.windowsRegistryKey "HKEY_LOCAL_MACHINE\\Some\\Key"
               ( Spec.WindowsRegistryKeyState.HasProperty
                   { name = "NumProperty", propertyType = "type_dword" }
@@ -155,10 +162,27 @@ in  Plan.make Spec.targetBackend
               ( Spec.MysqlConfigState.Compare
                   { op = Spec.CompareOp.Gt, value = 100000000 }
               )
+          -- CompareExpr: per-host dynamic threshold via customAttributes.
+          -- expand_attr "total_ram_kb" -> "paninfraspec_total_ram_kb".
+          , Spec.mysqlConfig "innodb_buffer_pool_size_bytes"
+              ( Spec.MysqlConfigState.CompareExpr
+                  { op    = Spec.CompareOp.Gt
+                  , value =
+                      Spec.expand_attr "total_ram_kb"
+                        ++ ".to_i * 1024 * 70 / 100"
+                  }
+              )
           , Spec.mysqlConfig "socket"
               (Spec.MysqlConfigState.EqText "/tmp/mysql.sock")
           , Spec.phpConfig "default_mimetype"
               (Spec.PhpConfigState.EqText "text/html")
+          -- CompareExpr for php_config (uses expand_attr "max_mem_mb").
+          , Spec.phpConfig "memory_limit_mb"
+              ( Spec.PhpConfigState.CompareExpr
+                  { op    = Spec.CompareOp.Le
+                  , value = Spec.expand_attr "max_mem_mb" ++ ".to_i"
+                  }
+              )
           , Spec.phpConfig "session.cache_expire"
               (Spec.PhpConfigState.EqNat 180)
           , Spec.phpConfig "mbstring.http_output_conv_mimetypes"

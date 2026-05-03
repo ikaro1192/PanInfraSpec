@@ -6,11 +6,12 @@
 let CompareOp = < Lt | Le | Gt | Ge | Eq | Match >
 
 let AttrLeaf =
-      < ALText   : Text
-      | ALNat    : Natural
-      | ALBool   : Bool
-      | ALSymbol : Text
-      | ALRegex  : Text
+      < ALText     : Text
+      | ALNat      : Natural
+      | ALBool     : Bool
+      | ALSymbol   : Text
+      | ALRegex    : Text
+      | ALRubyExpr : Text
       >
 
 let AttrValue =
@@ -151,7 +152,9 @@ let CronState =
       | HasEntryAsUser : { entry : Text, user : Text }
       >
 let X509CertificateState =
-      < ValidityInDaysCompare : { op : CompareOp, value : Natural } >
+      < ValidityInDaysCompare     : { op : CompareOp, value : Natural }
+      | ValidityInDaysCompareExpr : { op : CompareOp, value : Text }
+      >
 let WindowsRegistryKeyState =
       < HasProperty      : { name : Text, propertyType : Text }
       | HasPropertyValue : { name : Text, propertyType : Text, value : Natural }
@@ -180,16 +183,18 @@ let IisWebsiteState =
       >
 
 let MysqlConfigState =
-      < EqText  : Text
-      | EqNat   : Natural
-      | Compare : { op : CompareOp, value : Natural }
+      < EqText      : Text
+      | EqNat       : Natural
+      | Compare     : { op : CompareOp, value : Natural }
+      | CompareExpr : { op : CompareOp, value : Text }
       >
 
 let PhpConfigState =
-      < EqText  : Text
-      | EqNat   : Natural
-      | Compare : { op : CompareOp, value : Natural }
-      | Match   : Text
+      < EqText      : Text
+      | EqNat       : Natural
+      | Compare     : { op : CompareOp, value : Natural }
+      | CompareExpr : { op : CompareOp, value : Text }
+      | Match       : Text
       >
 
 let X509PrivateKeyState =
@@ -629,6 +634,13 @@ let x509CertificateStateAttrs =
                       AttrValue.AVCompare
                         { op = c.op, value = AttrLeaf.ALNat c.value }
                   }
+          , ValidityInDaysCompareExpr =
+              \(c : { op : CompareOp, value : Text }) ->
+                toMap
+                  { validity_in_days =
+                      AttrValue.AVCompare
+                        { op = c.op, value = AttrLeaf.ALRubyExpr c.value }
+                  }
           }
           s
 
@@ -737,6 +749,13 @@ let mysqlConfigStateAttrs =
                       AttrValue.AVCompare
                         { op = c.op, value = AttrLeaf.ALNat c.value }
                   }
+          , CompareExpr =
+              \(c : { op : CompareOp, value : Text }) ->
+                toMap
+                  { value =
+                      AttrValue.AVCompare
+                        { op = c.op, value = AttrLeaf.ALRubyExpr c.value }
+                  }
           }
           s
 
@@ -763,6 +782,13 @@ let phpConfigStateAttrs =
                   { value =
                       AttrValue.AVCompare
                         { op = c.op, value = AttrLeaf.ALNat c.value }
+                  }
+          , CompareExpr =
+              \(c : { op : CompareOp, value : Text }) ->
+                toMap
+                  { value =
+                      AttrValue.AVCompare
+                        { op = c.op, value = AttrLeaf.ALRubyExpr c.value }
                   }
           , Match =
               \(p : Text) ->
@@ -1224,6 +1250,16 @@ let dockerImage
         , attrs = dockerImageStateAttrs s
         }
 
+-- | Expand an Inventory custom-attribute @name@ into the Ruby variable name
+-- the emitter binds at the top of the generated spec file. Plans that need
+-- to reference a per-host dynamic value should write
+-- @expand_attr "mem_total_bytes"@ instead of hard-coding
+-- @"paninfraspec_mem_total_bytes"@: the prefix is owned by the generator and
+-- may change.
+let expand_attr
+    : Text -> Text
+    = \(name : Text) -> "paninfraspec_" ++ name
+
 in  { AttrValue         = AttrValue
     , AttrLeaf          = AttrLeaf
     , CompareOp         = CompareOp
@@ -1313,5 +1349,7 @@ in  { AttrValue         = AttrValue
     , zfs                   = zfs
     , dockerContainer       = dockerContainer
     , dockerImage           = dockerImage
+    -- Custom-attribute references (Inventory.customAttributes)
+    , expand_attr          = expand_attr
     , targetBackend     = "serverspec"
     }

@@ -16,6 +16,7 @@ import qualified Property.EmitTest
 import qualified Roundtrip.DhallEncodingTest
 import qualified SoT.TerraformTest
 import qualified Synth.HundredHostsTest
+import qualified Unit.EmitCustomAttributesTest
 import qualified Unit.LayoutTest
 import qualified Unit.ValidateTest
 
@@ -23,6 +24,7 @@ main :: IO ()
 main = defaultMain $ testGroup "paninfraspec"
   [ Unit.ValidateTest.tests
   , Unit.LayoutTest.tests
+  , Unit.EmitCustomAttributesTest.tests
   , Roundtrip.DhallEncodingTest.tests
   , Property.EmitTest.tests
   , Synth.HundredHostsTest.tests
