@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Haskell](https://img.shields.io/badge/language-Haskell-5D4F85)](https://www.haskell.org/)
 
-PanInfraSpec is a typed front-end for [Serverspec](https://serverspec.org/).
+PanInfraSpec is a Dhall front-end for [Serverspec](https://serverspec.org/).
 You describe your nodes and the assertions they should satisfy in
 [Dhall](https://dhall-lang.org/), and `paninfraspec-gen` produces the
 matching `*_spec.rb`, `spec_helper.rb`, and `Rakefile` for you. PanInfraSpec
@@ -106,29 +106,10 @@ receives the baseline check, the full nginx stack, *and* the Prometheus port.
 
 ## Loading inventory from Terraform state
 
-Instead of hand-writing `examples/inventory.dhall`, point at a
-`terraform.tfstate` JSON file:
-
-```sh
-cabal run paninfraspec-gen -- \
-  --from-terraform-state examples/terraform-state.json \
-  --plan                 examples/plan.dhall \
-  --target               serverspec \
-  --out                  /tmp/out
-```
-
-The Terraform adapter walks every `aws_instance` resource and applies the
-following tag conventions:
-
-| Field | Source | Fallback |
-|---|---|---|
-| `hostname` | `tags.Name` | `attributes.id`, then `<type>.<name>` |
-| `ip` | `attributes.private_ip` | `attributes.public_ip`, then `None` |
-| `role` | `tags.Role` | `"untagged"` |
-| `tags` | remaining tag *values* (Name & Role excluded) | `[]` |
-
-Other resource types (security groups, IAM, etc.) are skipped. Pass exactly
-one of `--inventory` or `--from-terraform-state`, not both.
+Instead of hand-writing an inventory, point `--from-terraform-state` at a
+`terraform.tfstate` JSON file and PanInfraSpec will derive nodes from every
+`aws_instance` resource. See [`docs/terraform.md`](./docs/terraform.md) for
+the tag conventions and a full example.
 
 ## Customising the output layout
 
@@ -196,47 +177,12 @@ not execute tests — those failures are surfaced by Serverspec itself.
 
 ## Resource catalogue
 
-The Dhall prelude in [`dhall/Serverspec.dhall`](./dhall/Serverspec.dhall)
-exposes the following smart constructors. Each one takes a primary key (the
-service name, port number, file path, etc.) and a state value drawn from the
-matching `*State` union.
+PanInfraSpec ships smart constructors for 26 Serverspec resource types
+(service, package, port, file, user, iptables, SELinux, cgroup, …). Each
+constructor takes a primary key plus a state value drawn from a typed union.
 
-| Resource | Constructor | States |
-|---|---|---|
-| Service | `service : Text -> ServiceState -> Assertion` | `Running`, `Enabled` |
-| Package | `package : Text -> PackageState -> Assertion` | `Installed` |
-| Port | `port : Natural -> PortState -> Assertion` | `Listening`, `WithProtocol : Text` |
-| Command | `command : Text -> CommandState -> Assertion` | `ExitCode : Natural` |
-| File | `file : Text -> FileState -> Assertion` | `Exist`, `OwnedBy : Text`, `GroupedInto : Text`, `Mode : Natural`, `Contains : Text` |
-| User | `user : Text -> UserState -> Assertion` | `Exist`, `HasUid : Natural`, `BelongsToGroup : Text`, `HasHomeDirectory : Text`, `HasLoginShell : Text` |
-| Group | `group : Text -> GroupState -> Assertion` | `Exist`, `HasGid : Natural` |
-| Process | `process : Text -> ProcessState -> Assertion` | `Running`, `RunByUser : Text` |
-| Mount | `mount : Text -> MountState -> Assertion` | `Mounted`, `OnDevice : Text`, `OfFstype : Text` |
-| Interface | `interface : Text -> InterfaceState -> Assertion` | `Exist`, `HasSpeed : Natural`, `HasIpv4Address : Text` |
-| Kernel module | `kernelModule : Text -> KernelModuleState -> Assertion` | `Loaded` |
-| Bond | `bond : Text -> BondState -> Assertion` | `Exist`, `HasInterface : Text` |
-| Bridge | `bridge : Text -> BridgeState -> Assertion` | `Exist`, `HasInterface : Text` |
-| Default gateway (singleton) | `defaultGateway : DefaultGatewayState -> Assertion` | `HasIpaddress : Text`, `HasInterface : Text` |
-| Host | `host : Text -> HostState -> Assertion` | `Resolvable`, `Reachable`, `HasIpaddress : Text` |
-| iptables | `iptables : Text -> IptablesState -> Assertion` | `HasRule : Text` |
-| ip6tables | `ip6tables : Text -> Ip6tablesState -> Assertion` | `HasRule : Text` |
-| ipfilter | `ipfilter : Text -> IpfilterState -> Assertion` | `HasRule : Text` |
-| ipnat | `ipnat : Text -> IpnatState -> Assertion` | `HasRule : Text` |
-| Routing table (singleton) | `routingTable : RoutingTableState -> Assertion` | `HasEntry : { destination : Text, gateway : Text }` |
-| SELinux (singleton) | `selinux : SelinuxState -> Assertion` | `Enforcing`, `Permissive`, `Disabled` |
-| SELinux module | `selinuxModule : Text -> SelinuxModuleState -> Assertion` | `Enabled`, `Installed` |
-| Linux audit system (singleton) | `linuxAuditSystem : LinuxAuditSystemState -> Assertion` | `Running`, `Enabled` |
-| Linux kernel parameter | `linuxKernelParameter : Text -> LinuxKernelParameterState -> Assertion` | `HasValue : Text` |
-| Cgroup | `cgroup : Text -> CgroupState -> Assertion` | `HasParameter : { name : Text, value : Text }` |
-
-To express more than one state for the same resource (e.g. nginx must be both
-running and enabled), write two assertions with the same primary key — they
-are merged into a single `describe` block in the generated Ruby.
-
-To add a new resource, extend `dhall/Serverspec.dhall` with a smart
-constructor and a state type, then add one entry to `formatItLine` in
-`src/PanInfraSpec/Emit/Serverspec.hs` mapping each attribute key to its Ruby
-DSL line.
+See [`docs/resources.md`](./docs/resources.md) for the full table of
+constructors, their state unions, and how to add a new resource.
 
 ## How it works
 
@@ -254,13 +200,12 @@ fails fast rather than emit Ruby that is guaranteed to fail at run time.
 The arrow above is drawn for Serverspec, but the AST and the emitter
 interface are backend-agnostic — Goss (YAML), InSpec, and Testinfra emitters
 are planned, and adding one is a new Dhall prelude plus a new emitter, with
-no changes to existing inputs. The full design is in
-[`specification.md`](./specification.md).
+no changes to existing inputs.
 
 ## See also
 
-- [`specification.md`](./specification.md) — full design (~730 lines, JP/EN
-  bilingual)
+- [`docs/resources.md`](./docs/resources.md) — full Serverspec resource catalogue
+- [`docs/terraform.md`](./docs/terraform.md) — loading inventory from a Terraform `tfstate` file
 - [`examples/`](./examples) — sample inventory, plan, and Terraform state
 - [`dhall/`](./dhall) — preludes you import from your own Dhall files
   (`Inventory.dhall`, `Serverspec.dhall`, `Plan.dhall`)

@@ -1,7 +1,7 @@
 -- dhall/Serverspec.dhall
 -- Per-backend Dhall prelude for Serverspec.
 -- Smart constructors enforce Resource × State pairing at the input boundary
--- (Defense-in-depth layer 1). See specification.md §3.2 / §5.4.
+-- (Defense-in-depth layer 1).
 
 let CompareOp = < Lt | Le | Gt | Ge | Eq | Match >
 

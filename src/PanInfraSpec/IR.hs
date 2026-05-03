@@ -199,8 +199,7 @@ instance Dhall.FromDhall Mapping where
 
 -- | The whole loaded plan file. The @targetBackend@ field is forwarded from
 -- the per-backend Dhall prelude (e.g., @Serverspec.dhall@) and lets the CLI
--- assert that @--target@ matches the prelude the user actually imported
--- (specification.md §6.2).
+-- assert that @--target@ matches the prelude the user actually imported.
 data PlanFile = PlanFile
   { pfTargetBackend :: Text
   , pfMappings      :: [Mapping]
