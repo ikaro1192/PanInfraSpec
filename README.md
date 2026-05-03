@@ -54,9 +54,11 @@ An inventory is a Dhall file that returns a list of nodes. See
 -- Pin to a tag and `dhall freeze` for production use.
 let I = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Inventory.dhall
 
-in  [ { hostname = "web01", ip = Some "10.0.1.10", role = "Web",       tags = [ "frontend", "metrics" ] }
-    , { hostname = "web02", ip = Some "10.0.1.11", role = "Web",       tags = [ "frontend" ] }
-    , { hostname = "db01",  ip = None Text,        role = "DBPrimary", tags = [ "metrics" ] }
+let none = [] : List I.CustomAttribute
+
+in  [ { hostname = "web01", ip = Some "10.0.1.10", role = "Web",       tags = [ "frontend", "metrics" ], customAttributes = none }
+    , { hostname = "web02", ip = Some "10.0.1.11", role = "Web",       tags = [ "frontend" ],            customAttributes = none }
+    , { hostname = "db01",  ip = None Text,        role = "DBPrimary", tags = [ "metrics" ],             customAttributes = none }
     ] : List I.Node
 ```
 
@@ -72,9 +74,10 @@ Each node has five fields:
 
 ## Writing a plan
 
-A plan is a list of `Mapping` values. Each mapping pairs a *selector* with a
-list of *assertions*, and a node receives every assertion from every mapping
-whose selector matches it. See [`examples/plan.dhall`](./examples/plan.dhall):
+A plan pairs a target backend with a list of `Mapping` values. Each mapping
+pairs a *selector* with a list of *assertions*, and a node receives every
+assertion from every mapping whose selector matches it. See
+[`examples/plan.dhall`](./examples/plan.dhall):
 
 ```dhall
 -- Pin to a tag and `dhall freeze` for production use.
@@ -86,13 +89,14 @@ let nginxSpec =
       [ Spec.package "nginx" Spec.PackageState.Installed
       , Spec.service "nginx" Spec.ServiceState.Running
       , Spec.service "nginx" Spec.ServiceState.Enabled
-      , Spec.port 80 Spec.PortState.Listening
+      , Spec.port 80 (Spec.PortState.WithProtocol "tcp")
       ]
 
-in  [ Plan.onAll                     baseSpec
-    , Plan.forRole "Web"             nginxSpec
-    , Plan.forTag  "metrics"         [ Spec.port 9090 Spec.PortState.Listening ]
-    ]
+in  Plan.make Spec.targetBackend
+      [ Plan.onAll                     baseSpec
+      , Plan.forRole "Web"             nginxSpec
+      , Plan.forTag  "metrics"         [ Spec.port 9090 Spec.PortState.Listening ]
+      ]
 ```
 
 The four selector helpers are:
