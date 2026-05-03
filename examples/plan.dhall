@@ -2,9 +2,12 @@
 -- Mapping rules: every node gets a baseline check; Web nodes get an nginx stack;
 -- anything tagged "metrics" gets a Prometheus port check.
 
-let Spec = ../dhall/Serverspec.dhall
+-- The two imports below resolve to the latest `main` of this repository.
+-- For production use, pin to a release tag (e.g. v0.2.0.0) and run
+-- `dhall freeze` to attach an integrity SHA-256 hash to each import.
+let Spec = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Serverspec.dhall
 
-let Plan = ../dhall/Plan.dhall
+let Plan = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Plan.dhall
 
 let baseSpec
     : List Spec.Assertion

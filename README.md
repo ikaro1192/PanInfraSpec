@@ -51,7 +51,8 @@ An inventory is a Dhall file that returns a list of nodes. See
 [`examples/inventory.dhall`](./examples/inventory.dhall):
 
 ```dhall
-let I = ../dhall/Inventory.dhall
+-- Pin to a tag and `dhall freeze` for production use.
+let I = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Inventory.dhall
 
 in  [ { hostname = "web01", ip = Some "10.0.1.10", role = "Web",       tags = [ "frontend", "metrics" ] }
     , { hostname = "web02", ip = Some "10.0.1.11", role = "Web",       tags = [ "frontend" ] }
@@ -76,8 +77,9 @@ list of *assertions*, and a node receives every assertion from every mapping
 whose selector matches it. See [`examples/plan.dhall`](./examples/plan.dhall):
 
 ```dhall
-let Spec = ../dhall/Serverspec.dhall
-let Plan = ../dhall/Plan.dhall
+-- Pin to a tag and `dhall freeze` for production use.
+let Spec = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Serverspec.dhall
+let Plan = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Plan.dhall
 
 let baseSpec  = [ Spec.command "uname -a" (Spec.CommandState.ExitCode 0) ]
 let nginxSpec =
@@ -120,15 +122,17 @@ layout file and pass it with `--layout`:
 
 ```dhall
 -- examples/layout-by-role.dhall
-let L = ../dhall/Layout.dhall
+-- Pin to a tag and `dhall freeze` for production use.
+let L = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Layout.dhall
 in  L.byRole   -- spec files under <role>/<hostname>_spec.rb
 ```
 
 Or roll your own with the full Dhall expression power:
 
 ```dhall
-let I = ../dhall/Inventory.dhall
-let L = ../dhall/Layout.dhall
+-- Pin to a tag and `dhall freeze` for production use.
+let I = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Inventory.dhall
+let L = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Layout.dhall
 
 in  L.make
       { specPath = \(n : I.Node) ->
@@ -224,7 +228,8 @@ names/commands are rejected at generate time.
 **Step 2: reference it from the plan with `expand_attr`.**
 
 ```dhall
-let Spec = ../dhall/Serverspec.dhall
+-- Pin to a tag and `dhall freeze` for production use.
+let Spec = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Serverspec.dhall
 
 in  Spec.mysqlConfig "innodb_buffer_pool_size"
       ( Spec.MysqlConfigState.CompareExpr
