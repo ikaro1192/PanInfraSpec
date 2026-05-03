@@ -19,13 +19,14 @@ import qualified Data.Text.IO as TIO
 import Options.Applicative
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode (..))
-import System.FilePath ((</>))
+import System.FilePath (takeDirectory, (</>))
 import System.IO (hPutStrLn, stderr)
 
 import PanInfraSpec.Dhall (loadInventory, loadPlan, validate)
 import PanInfraSpec.DumpPlan (dumpPlan)
 import PanInfraSpec.Emit (emitFor)
 import PanInfraSpec.IR
+import PanInfraSpec.Layout (Layout, defaultLayout, loadLayout)
 import PanInfraSpec.Resolve (matches, resolve)
 import PanInfraSpec.SoT (toNodes)
 import PanInfraSpec.SoT.Terraform (TerraformStateFile (..))
@@ -47,6 +48,7 @@ data Options = Options
   , optPlan      :: FilePath
   , optTarget    :: Text
   , optOut       :: FilePath
+  , optLayout    :: Maybe FilePath
   , optOnlyRole  :: Maybe Text
   , optOnlyHost  :: Maybe Text
   , optOnlyTag   :: Maybe Text
@@ -86,6 +88,12 @@ parser = Options
        <> metavar "DIR"
        <> help "Output directory (created if missing)"
         )
+  <*> optional (strOption
+        ( long "layout"
+       <> metavar "PATH"
+       <> help "Path to a Dhall layout file (returns dhall/Layout.dhall's Layout). \
+               \When omitted, files are written flat as <hostname>_spec.rb."
+        ))
   <*> optional (strOption
         ( long "only-role"
        <> metavar "ROLE"
@@ -137,6 +145,19 @@ loadNodes = \case
   FromDhall path          -> tryIO (loadInventory path)
   FromTerraformState path -> tryIO (toNodes (TerraformStateFile path))
 
+-- | Resolve the active 'Layout': read the Dhall file when provided, else use
+-- 'defaultLayout' so the pre-Layout-feature output stays bit-for-bit
+-- identical when @--layout@ is omitted.
+resolveLayout :: Maybe FilePath -> IO (Either Text Layout)
+resolveLayout = \case
+  Nothing   -> pure (Right defaultLayout)
+  Just path -> do
+    res <- tryIO (loadLayout path)
+    pure $ case res of
+      Left  e         -> Left e
+      Right (Left e)  -> Left e
+      Right (Right l) -> Right l
+
 -- | End-to-end pipeline. Returns 0 on success, 2 on any failure.
 run :: Options -> IO ExitCode
 run opts@Options{..} = do
@@ -158,9 +179,13 @@ run opts@Options{..} = do
                    | optDumpPlan -> do
                        TIO.putStr (dumpPlan ep)
                        pure ExitSuccess
-                   | otherwise -> case emitFor ep of
-                       Left e     -> die ("emit failed: " <> e)
-                       Right outs -> writeAll optOut outs
+                   | otherwise -> do
+                       layoutRes <- resolveLayout optLayout
+                       case layoutRes of
+                         Left e -> die ("layout load failed: " <> e)
+                         Right layout -> case emitFor layout ep of
+                           Left e     -> die ("emit failed: " <> e)
+                           Right outs -> writeAll optOut outs
 
 -- | Layer-1 check: the @--target@ flag must match the @targetBackend@ field
 -- the plan file forwards from its imported per-backend Dhall prelude
@@ -187,7 +212,12 @@ writeAll outDir files = do
     Right () -> pure ExitSuccess
     Left e   -> die ("write failed: " <> T.pack (show e))
   where
-    write rel content = BS.writeFile (outDir </> rel) (TE.encodeUtf8 content)
+    -- The Layout API allows nested paths (e.g. "Web/web01_spec.rb"), so we
+    -- have to materialise their parent directories before writing.
+    write rel content = do
+      let full = outDir </> rel
+      createDirectoryIfMissing True (takeDirectory full)
+      BS.writeFile full (TE.encodeUtf8 content)
 
 die :: Text -> IO ExitCode
 die msg = do

@@ -23,6 +23,7 @@ import qualified Prettyprinter as PP
 import Prettyprinter.Render.Text (renderStrict)
 
 import PanInfraSpec.IR
+import PanInfraSpec.Layout (Layout (..), validateLayoutPath)
 
 -- | Schema tag for an 'AttrValue'. Used by layer-3 validation only.
 data AttrTag
@@ -700,15 +701,18 @@ formatGroup (Assertion k pk attrs) = do
   let body = vsep (renderAttrs k attrs)
   pure $ vsep [header, indent 2 body, "end"]
 
--- | Render a 'Job' as a @(filename, content)@ pair.
-formatJob :: Job -> Either Text (FilePath, Text)
-formatJob (Job node assertions) = do
+-- | Render a 'Job' as a @(filename, content)@ pair. The filename comes from
+-- the Layout's 'lSpecPath' applied to the node, then validated to make sure
+-- the user's Dhall function did not produce something that would write
+-- outside the @--out@ directory.
+formatJob :: Layout -> Job -> Either Text (FilePath, Text)
+formatJob layout (Job node assertions) = do
   validated <- traverse validateAssertion assertions
   merged    <- traverse mergeGroup (groupAssertions validated)
   blocks    <- traverse formatGroup merged
+  filename  <- validateLayoutPath (T.unpack (lSpecPath layout node))
   let docText d = renderStrict (PP.layoutPretty PP.defaultLayoutOptions d)
       body      = T.intercalate "\n\n" ("require 'spec_helper'" : map docText blocks)
-      filename  = T.unpack (hostname node) <> "_spec.rb"
   pure (filename, body <> "\n")
 
 -- | Static @spec_helper.rb@ produced alongside each output set. Uses the
@@ -758,14 +762,27 @@ rakefile = T.unlines
   , "task default: :spec"
   ]
 
--- | Top-level entry. Performs the backend guard and assembles per-host Ruby
--- files plus the static helpers.
-emit :: ExecutionPlan -> Either Text (Map FilePath Text)
-emit ep
+-- | Top-level entry. Performs the backend guard, per-host emission with
+-- collision detection (so a non-injective 'lSpecPath' fails fast), and
+-- finally drops the static helpers in. The helper / Rakefile paths must not
+-- collide with any spec output path either.
+emit :: Layout -> ExecutionPlan -> Either Text (Map FilePath Text)
+emit layout ep
   | epTargetBackend ep /= "serverspec" =
       Left ("backend mismatch: expected serverspec, got " <> epTargetBackend ep)
   | otherwise = do
-      pairs <- traverse formatJob (epJobs ep)
-      let perHost = Map.fromList pairs
-      pure $ Map.insert "spec_helper.rb" specHelperRb
-           $ Map.insert "Rakefile"       rakefile perHost
+      pairs   <- traverse (formatJob layout) (epJobs ep)
+      perHost <- foldM insertNoClash Map.empty pairs
+      helperPath   <- validateLayoutPath (T.unpack (lHelperPath   layout))
+      rakefilePath <- validateLayoutPath (T.unpack (lRakefilePath layout))
+      withHelper <- insertCommon "helperPath"   helperPath   specHelperRb perHost
+      insertCommon "rakefilePath" rakefilePath rakefile     withHelper
+  where
+    insertNoClash acc (path, content) = case Map.lookup path acc of
+      Just _  -> Left ("specPath collision at " <> T.pack path
+                       <> ": multiple hosts mapped to the same output file")
+      Nothing -> Right (Map.insert path content acc)
+    insertCommon label path content acc = case Map.lookup path acc of
+      Just _  -> Left (label <> " " <> T.pack path
+                       <> " collides with a generated spec file")
+      Nothing -> Right (Map.insert path content acc)

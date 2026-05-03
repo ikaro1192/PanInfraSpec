@@ -37,6 +37,7 @@ common deps
     , bytestring
     , containers
     , aeson                >=2.0
+    , contravariant
     , dhall
     , prettyprinter
     , optparse-applicative
@@ -49,6 +50,7 @@ library
   exposed-modules:
       PanInfraSpec.IR
     , PanInfraSpec.Dhall
+    , PanInfraSpec.Layout
     , PanInfraSpec.Resolve
     , PanInfraSpec.Emit
     , PanInfraSpec.Emit.Serverspec
@@ -70,6 +72,7 @@ test-suite paninfraspec-test
   main-is:          Spec.hs
   other-modules:
       Unit.ValidateTest
+    , Unit.LayoutTest
     , Roundtrip.DhallEncodingTest
     , Property.EmitTest
     , Synth.HundredHostsTest

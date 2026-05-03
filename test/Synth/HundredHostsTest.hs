@@ -10,6 +10,7 @@ import Test.Tasty.HUnit
 import PanInfraSpec.Dhall (validate)
 import PanInfraSpec.Emit (emitFor)
 import PanInfraSpec.IR
+import PanInfraSpec.Layout (defaultLayout)
 import PanInfraSpec.Resolve (resolve)
 
 tests :: TestTree
@@ -54,7 +55,7 @@ hundredHosts :: IO ()
 hundredHosts = do
   let ep = resolve "serverspec" synthInventory synthPlan
   length (epJobs ep) @?= 100
-  case validate ep >>= emitFor of
+  case validate ep >>= emitFor defaultLayout of
     Left e -> assertFailure ("emit failed: " <> T.unpack e)
     Right outs -> do
       -- 100 host files + spec_helper.rb + Rakefile
