@@ -36,7 +36,13 @@ assertLeftContains needle = \case
   Right _ -> assertFailure ("expected Left containing " <> show needle <> ", got Right")
 
 mkNode :: Text -> Node
-mkNode h = Node { hostname = h, ip = Nothing, role = Role "Web", tags = [] }
+mkNode h = Node
+  { hostname         = h
+  , ip               = Nothing
+  , role             = Role "Web"
+  , tags             = []
+  , customAttributes = []
+  }
 
 layer1TargetMismatch :: IO ()
 layer1TargetMismatch =

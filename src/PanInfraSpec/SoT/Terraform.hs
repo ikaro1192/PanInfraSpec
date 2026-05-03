@@ -114,10 +114,11 @@ instanceToNode r (TfInstance attrs) = do
         ]
   hn <- mHost
   pure Node
-    { hostname = hn
-    , ip       = mIp
-    , role     = Role roleT
-    , tags     = restTags
+    { hostname         = hn
+    , ip               = mIp
+    , role             = Role roleT
+    , tags             = restTags
+    , customAttributes = []
     }
 
 -- | Read a Text-typed JSON attribute, returning 'Nothing' if missing or null.

@@ -63,11 +63,12 @@ renderValue = \case
 
 renderLeaf :: AttrLeaf -> Text
 renderLeaf = \case
-  ALText   t -> "\"" <> t <> "\""
-  ALNat    n -> tshow n
-  ALBool   b -> if b then "True" else "False"
-  ALSymbol s -> ":" <> s
-  ALRegex  p -> "/" <> p <> "/"
+  ALText     t -> "\"" <> t <> "\""
+  ALNat      n -> tshow n
+  ALBool     b -> if b then "True" else "False"
+  ALSymbol   s -> ":" <> s
+  ALRegex    p -> "/" <> p <> "/"
+  ALRubyExpr e -> "{ruby:" <> e <> "}"
 
 renderOp :: CompareOp -> Text
 renderOp = \case

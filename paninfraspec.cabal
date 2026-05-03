@@ -73,6 +73,7 @@ test-suite paninfraspec-test
   other-modules:
       Unit.ValidateTest
     , Unit.LayoutTest
+    , Unit.EmitCustomAttributesTest
     , Roundtrip.DhallEncodingTest
     , Property.EmitTest
     , Synth.HundredHostsTest

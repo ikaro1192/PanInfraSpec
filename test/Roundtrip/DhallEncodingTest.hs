@@ -14,13 +14,13 @@ attrValueU :: Text
 attrValueU =
   "< AVText : Text | AVNat : Natural | AVBool : Bool \
   \| AVSymbol : Text \
-  \| AVList : List < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text > \
-  \| AVRecord : List { mapKey : Text, mapValue : < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text > } \
-  \| AVCompare : { op : < Lt | Le | Gt | Ge | Eq | Match >, value : < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text > } \
+  \| AVList : List < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text | ALRubyExpr : Text > \
+  \| AVRecord : List { mapKey : Text, mapValue : < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text | ALRubyExpr : Text > } \
+  \| AVCompare : { op : < Lt | Le | Gt | Ge | Eq | Match >, value : < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text | ALRubyExpr : Text > } \
   \>"
 
 attrLeafU :: Text
-attrLeafU = "< ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text >"
+attrLeafU = "< ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text | ALRubyExpr : Text >"
 
 compareOpU :: Text
 compareOpU = "< Lt | Le | Gt | Ge | Eq | Match >"
@@ -64,6 +64,21 @@ tests = testGroup "Dhall round-trip"
       )
   , testCase "CompareOp.Gt"      (decodes ("(" <> compareOpU <> ").Gt") OpGt)
   , testCase "AttrLeaf.ALSymbol" (decodes ("(" <> attrLeafU <> ").ALSymbol \"foo\"") (ALSymbol "foo"))
+  , testCase "AttrLeaf.ALRubyExpr"
+      (decodes ("(" <> attrLeafU <> ").ALRubyExpr \"x.to_i * 2\"") (ALRubyExpr "x.to_i * 2"))
+  , testCase "AttrValue.AVCompare with ALRubyExpr"
+      (decodes
+        ("(" <> attrValueU <> ").AVCompare \
+         \{ op = (" <> compareOpU <> ").Gt \
+         \, value = (" <> attrLeafU <> ").ALRubyExpr \"paninfraspec_x.to_i\" \
+         \}")
+        (AVCompare OpGt (ALRubyExpr "paninfraspec_x.to_i"))
+      )
+  , testCase "CustomAttribute round-trip"
+      (decodes
+        "{ name = \"total_ram_kb\", command = \"awk '/MemTotal/' /proc/meminfo\" }"
+        (CustomAttribute "total_ram_kb" "awk '/MemTotal/' /proc/meminfo")
+      )
   , testCase "Selector.SelAll"   (decodes "(< SelAll | SelRole : Text | SelTag : Text | SelHost : Text >).SelAll"   SelAll)
   , testCase "Selector.SelRole"  (decodes "(< SelAll | SelRole : Text | SelTag : Text | SelHost : Text >).SelRole \"Web\"" (SelRole (Role "Web")))
   , testCase "Assertion record"
@@ -74,17 +89,17 @@ tests = testGroup "Dhall round-trip"
   , testCase "Node -> Text via Dhall.function (hostname projection)" $ do
       f <- Dhall.input
         (Dhall.function nodeEncoder Dhall.strictText)
-        "\\(n : { hostname : Text, ip : Optional Text, role : Text, tags : List Text }) -> n.hostname"
+        "\\(n : { hostname : Text, ip : Optional Text, role : Text, tags : List Text, customAttributes : List { name : Text, command : Text } }) -> n.hostname"
       assertEqual "hostname projection"
         "web01"
-        (f (Node "web01" Nothing (Role "Web") []))
+        (f (Node "web01" Nothing (Role "Web") [] []))
   , testCase "Node -> Text via Dhall.function (role/hostname interpolation)" $ do
       f <- Dhall.input
         (Dhall.function nodeEncoder Dhall.strictText)
-        "\\(n : { hostname : Text, ip : Optional Text, role : Text, tags : List Text }) -> \"${n.role}/${n.hostname}_spec.rb\""
+        "\\(n : { hostname : Text, ip : Optional Text, role : Text, tags : List Text, customAttributes : List { name : Text, command : Text } }) -> \"${n.role}/${n.hostname}_spec.rb\""
       assertEqual "by-role layout"
         "Web/web01_spec.rb"
-        (f (Node "web01" (Just "10.0.1.10") (Role "Web") ["frontend"]))
+        (f (Node "web01" (Just "10.0.1.10") (Role "Web") ["frontend"] []))
   ]
 
 decodes :: (Eq a, Show a, Dhall.FromDhall a) => Text -> a -> IO ()

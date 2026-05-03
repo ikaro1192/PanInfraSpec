@@ -21,10 +21,11 @@ tests = testGroup "property"
 
 dummyNode :: Node
 dummyNode = Node
-  { hostname = "synth"
-  , ip       = Nothing
-  , role     = Role "synth"
-  , tags     = []
+  { hostname         = "synth"
+  , ip               = Nothing
+  , role             = Role "synth"
+  , tags             = []
+  , customAttributes = []
   }
 
 -- | Pick one schema-allowed @(kind, attrKey, AttrTag)@ triple. Wildcard kinds

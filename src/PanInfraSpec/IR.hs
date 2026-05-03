@@ -1,5 +1,6 @@
 module PanInfraSpec.IR
   ( Role (..)
+  , CustomAttribute (..)
   , Node (..)
   , CompareOp (..)
   , AttrLeaf (..)
@@ -11,6 +12,7 @@ module PanInfraSpec.IR
   , Job (..)
   , ExecutionPlan (..)
   , roleEncoder
+  , customAttributeEncoder
   , nodeEncoder
   ) where
 
@@ -30,22 +32,42 @@ newtype Role = Role { unRole :: Text }
   deriving stock   (Generic)
   deriving newtype (Show, Eq, Ord, IsString, Dhall.FromDhall)
 
+-- | A per-host shell command whose stdout becomes a Ruby variable bound at
+-- the top of the generated spec file (as @paninfraspec_<caName>@). Plans can
+-- then reference that value via 'AttrLeaf.ALRubyExpr', enabling
+-- host-dependent expected values (e.g., "innodb_buffer_pool_size must be at
+-- least 70% of the host's total RAM"). Mirrors the Dhall record
+-- @{ name : Text, command : Text }@ in @dhall/Inventory.dhall@.
+data CustomAttribute = CustomAttribute
+  { caName    :: Text
+  , caCommand :: Text
+  }
+  deriving stock (Show, Eq, Generic)
+
+instance Dhall.FromDhall CustomAttribute where
+  autoWith _ = Dhall.record $
+    CustomAttribute
+      <$> Dhall.field "name"    Dhall.auto
+      <*> Dhall.field "command" Dhall.auto
+
 -- | One inventory entry. Mirrors @dhall/Inventory.dhall@'s @Node@.
 data Node = Node
-  { hostname :: Text
-  , ip       :: Maybe Text
-  , role     :: Role
-  , tags     :: [Text]
+  { hostname         :: Text
+  , ip               :: Maybe Text
+  , role             :: Role
+  , tags             :: [Text]
+  , customAttributes :: [CustomAttribute]
   }
   deriving stock (Show, Eq, Generic)
 
 instance Dhall.FromDhall Node where
   autoWith _ = Dhall.record $
     Node
-      <$> Dhall.field "hostname" Dhall.auto
-      <*> Dhall.field "ip"       Dhall.auto
-      <*> Dhall.field "role"     Dhall.auto
-      <*> Dhall.field "tags"     Dhall.auto
+      <$> Dhall.field "hostname"         Dhall.auto
+      <*> Dhall.field "ip"               Dhall.auto
+      <*> Dhall.field "role"             Dhall.auto
+      <*> Dhall.field "tags"             Dhall.auto
+      <*> Dhall.field "customAttributes" Dhall.auto
 
 -- | Encoder for 'Role'. Wraps Text via the Role newtype unwrap. Needed so a
 -- Dhall function value @\\(n : Inventory.Node) -> ...@ can be applied
@@ -53,6 +75,22 @@ instance Dhall.FromDhall Node where
 -- before evaluating the user's function. See 'PanInfraSpec.Layout'.
 roleEncoder :: Dhall.Encoder Role
 roleEncoder = contramap unRole Dhall.inject
+
+-- | Encoder for 'CustomAttribute'. Mirrors the Dhall record
+-- @{ name : Text, command : Text }@ so a user-written
+-- @\\(n : Inventory.Node) -> ...@ can reach @n.customAttributes@ during
+-- Layout evaluation if it ever wants to.
+customAttributeEncoder :: Dhall.Encoder CustomAttribute
+customAttributeEncoder = Dhall.recordEncoder $
+  splay >$< (Dhall.encodeFieldWith "name"    Dhall.inject
+       `divided`  Dhall.encodeFieldWith "command" Dhall.inject)
+  where
+    splay c = (caName c, caCommand c)
+
+-- | 'ToDhall' instance for 'CustomAttribute' lets @Dhall.inject@ derive an
+-- encoder for @[CustomAttribute]@ when building 'nodeEncoder'.
+instance Dhall.ToDhall CustomAttribute where
+  injectWith _ = customAttributeEncoder
 
 -- | Encoder for 'Node'. The field set and types must match
 -- @dhall/Inventory.dhall@'s @Node@ exactly, otherwise the user's
@@ -66,9 +104,10 @@ nodeEncoder = Dhall.recordEncoder $
   splay >$< (Dhall.encodeFieldWith "hostname" Dhall.inject
        `divided` (Dhall.encodeFieldWith "ip" Dhall.inject
        `divided` (Dhall.encodeFieldWith "role" roleEncoder
-       `divided`  Dhall.encodeFieldWith "tags" Dhall.inject)))
+       `divided` (Dhall.encodeFieldWith "tags" Dhall.inject
+       `divided`  Dhall.encodeFieldWith "customAttributes" Dhall.inject))))
   where
-    splay n = (hostname n, (ip n, (role n, tags n)))
+    splay n = (hostname n, (ip n, (role n, (tags n, customAttributes n))))
 
 -- | Comparison operator for 'AVCompare'. Mirrors the Dhall union
 -- @< Lt | Le | Gt | Ge | Eq | Match >@. Used for matchers like
@@ -91,20 +130,27 @@ instance Dhall.FromDhall CompareOp where
 -- nested element type is a separate, non-recursive union (the same trick
 -- used for 'Selector' boolean composition).
 data AttrLeaf
-  = ALText   Text
-  | ALNat    Natural
-  | ALBool   Bool
-  | ALSymbol Text
-  | ALRegex  Text   -- ^ Ruby regex literal payload (without surrounding @/.../@).
+  = ALText     Text
+  | ALNat      Natural
+  | ALBool     Bool
+  | ALSymbol   Text
+  | ALRegex    Text   -- ^ Ruby regex literal payload (without surrounding @/.../@).
+  | ALRubyExpr Text   -- ^ Bare Ruby expression. Emitted unquoted so the value
+                      -- can flow into a matcher that compares against a Ruby
+                      -- variable or arithmetic expression (e.g.
+                      -- @paninfraspec_total_ram_kb.to_i * 1024 * 70 \/ 100@).
+                      -- Unlike 'ALText', no escaping or surrounding quotes
+                      -- are added — the user is asserting "this is Ruby".
   deriving stock (Show, Eq, Generic)
 
 instance Dhall.FromDhall AttrLeaf where
   autoWith _ = Dhall.union
-    (  (ALText   <$> Dhall.constructor "ALText"   Dhall.auto)
-    <> (ALNat    <$> Dhall.constructor "ALNat"    Dhall.auto)
-    <> (ALBool   <$> Dhall.constructor "ALBool"   Dhall.auto)
-    <> (ALSymbol <$> Dhall.constructor "ALSymbol" Dhall.auto)
-    <> (ALRegex  <$> Dhall.constructor "ALRegex"  Dhall.auto)
+    (  (ALText     <$> Dhall.constructor "ALText"     Dhall.auto)
+    <> (ALNat      <$> Dhall.constructor "ALNat"      Dhall.auto)
+    <> (ALBool     <$> Dhall.constructor "ALBool"     Dhall.auto)
+    <> (ALSymbol   <$> Dhall.constructor "ALSymbol"   Dhall.auto)
+    <> (ALRegex    <$> Dhall.constructor "ALRegex"    Dhall.auto)
+    <> (ALRubyExpr <$> Dhall.constructor "ALRubyExpr" Dhall.auto)
     )
 
 -- | Attribute value carried inside an 'Assertion'. Mirrors the Dhall union
