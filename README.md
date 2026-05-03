@@ -130,10 +130,47 @@ following tag conventions:
 Other resource types (security groups, IAM, etc.) are skipped. Pass exactly
 one of `--inventory` or `--from-terraform-state`, not both.
 
+## Customising the output layout
+
+By default each node lands at `<hostname>_spec.rb` directly under `--out`. If
+you want a different layout — say one directory per role — write a Dhall
+layout file and pass it with `--layout`:
+
+```dhall
+-- examples/layout-by-role.dhall
+let L = ../dhall/Layout.dhall
+in  L.byRole   -- spec files under <role>/<hostname>_spec.rb
+```
+
+Or roll your own with the full Dhall expression power:
+
+```dhall
+let I = ../dhall/Inventory.dhall
+let L = ../dhall/Layout.dhall
+
+in  L.make
+      { specPath = \(n : I.Node) ->
+          "${n.role}/${n.hostname}_spec.rb"
+      , helperPath   = "spec_helper.rb"
+      , rakefilePath = "Rakefile"
+      }
+```
+
+`specPath` is a `Node -> Text` function; the generator applies it once per
+node. Paths are validated: empty, absolute (`/etc/passwd`), and traversing
+(`..`) results are rejected, and a `specPath` that maps two hosts to the same
+file fails fast rather than silently overwriting.
+
+`spec_helper.rb` and `Rakefile` are co-located with the spec files; the
+generated `Rakefile` globs `*_spec.rb` in its own directory, so if you nest
+specs into subdirectories you may need a `Rakefile` per directory. The
+prelude ships `L.flat` (the default) and `L.byRole` ready-made.
+
 ## CLI reference
 
 ```
 Usage: paninfraspec-gen --inventory PATH --plan PATH --target BACKEND --out DIR
+                        [--layout PATH]
                         [--only-role ROLE] [--only-host HOST] [--only-tag TAG]
                         [--dump-plan]
 ```
@@ -146,6 +183,8 @@ Usage: paninfraspec-gen --inventory PATH --plan PATH --target BACKEND --out DIR
   Testinfra emitters are planned; each will ship with its own Dhall prelude
   and become a new value here.
 - `--out DIR` — output directory (created if missing).
+- `--layout PATH` — optional Dhall layout file (returns `Layout.Layout`).
+  When omitted, files are written flat as `<hostname>_spec.rb`.
 - `--only-role ROLE` / `--only-host HOST` / `--only-tag TAG` — filter the
   inventory before resolution. Multiple flags are AND-composed.
 - `--dump-plan` — print the resolved plan as a tree and exit; no files are

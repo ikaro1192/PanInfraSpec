@@ -10,6 +10,7 @@ import PanInfraSpec.CLI (checkTargetMatches)
 import PanInfraSpec.Dhall (validate)
 import PanInfraSpec.Emit (emitFor)
 import PanInfraSpec.IR
+import PanInfraSpec.Layout (defaultLayout)
 
 tests :: TestTree
 tests = testGroup "defense-in-depth"
@@ -57,20 +58,20 @@ layer3UnknownAttrKey :: IO ()
 layer3UnknownAttrKey =
   let typo = Assertion "service" "nginx" (Map.fromList [("runninng", AVBool True)])
       ep   = ExecutionPlan "serverspec" [Job (mkNode "h") [typo]]
-  in assertLeftContains "unknown attrs key" (emitFor ep)
+  in assertLeftContains "unknown attrs key" (emitFor defaultLayout ep)
 
 layer3ConflictingAttrs :: IO ()
 layer3ConflictingAttrs =
   let a = Assertion "command" "uname" (Map.fromList [("exit-status", AVNat 0)])
       b = Assertion "command" "uname" (Map.fromList [("exit-status", AVNat 1)])
       ep = ExecutionPlan "serverspec" [Job (mkNode "h") [a, b]]
-  in assertLeftContains "conflicting attribute" (emitFor ep)
+  in assertLeftContains "conflicting attribute" (emitFor defaultLayout ep)
 
 layer3EmptyAttrs :: IO ()
 layer3EmptyAttrs =
   let empty = Assertion "service" "nginx" Map.empty
       ep    = ExecutionPlan "serverspec" [Job (mkNode "h") [empty]]
-  in assertLeftContains "empty attrs" (emitFor ep)
+  in assertLeftContains "empty attrs" (emitFor defaultLayout ep)
 
 layer3BackendMismatch :: IO ()
 layer3BackendMismatch =
@@ -79,19 +80,19 @@ layer3BackendMismatch =
   -- but the Serverspec emitter doesn't accept. Phase 1 has no such backend, so
   -- exercise the dispatcher path which produces the equivalent guarantee.
   let ep = ExecutionPlan "" []
-  in assertLeftContains "unknown backend" (emitFor ep)
+  in assertLeftContains "unknown backend" (emitFor defaultLayout ep)
 
 layer3WrongProtocolType :: IO ()
 layer3WrongProtocolType =
   let bad = Assertion "port" "80" (Map.fromList [("protocol", AVNat 80)])
       ep  = ExecutionPlan "serverspec" [Job (mkNode "h") [bad]]
-  in assertLeftContains "wrong attr type for port.protocol" (emitFor ep)
+  in assertLeftContains "wrong attr type for port.protocol" (emitFor defaultLayout ep)
 
 layer3UnknownPortAttr :: IO ()
 layer3UnknownPortAttr =
   let bad = Assertion "port" "80" (Map.fromList [("tcp_only", AVBool True)])
       ep  = ExecutionPlan "serverspec" [Job (mkNode "h") [bad]]
-  in assertLeftContains "unknown attrs key for kind port" (emitFor ep)
+  in assertLeftContains "unknown attrs key for kind port" (emitFor defaultLayout ep)
 
 -- Wildcard kinds (e.g. routing_table) require AVText values for every attr key.
 layer3WildcardWrongType :: IO ()
@@ -99,7 +100,7 @@ layer3WildcardWrongType =
   let bad = Assertion "routing_table" "routing_table"
               (Map.fromList [("10.0.0.0/8", AVNat 1)])
       ep  = ExecutionPlan "serverspec" [Job (mkNode "h") [bad]]
-  in assertLeftContains "wildcard kind" (emitFor ep)
+  in assertLeftContains "wildcard kind" (emitFor defaultLayout ep)
 
 -- Two routing_table entries sharing the same destination but disagreeing on
 -- the gateway must be rejected by the layer-3 conflict fail-safe.
@@ -110,4 +111,4 @@ layer3RoutingTableConflict =
       b = Assertion "routing_table" "routing_table"
             (Map.fromList [("10.0.0.0/8", AVText "10.0.0.2")])
       ep = ExecutionPlan "serverspec" [Job (mkNode "h") [a, b]]
-  in assertLeftContains "conflicting attribute" (emitFor ep)
+  in assertLeftContains "conflicting attribute" (emitFor defaultLayout ep)

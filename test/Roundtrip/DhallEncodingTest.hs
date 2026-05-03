@@ -71,6 +71,20 @@ tests = testGroup "Dhall round-trip"
         ("{ kind = \"package\", primaryKey = \"nginx\", attrs = toMap { installed = (" <> attrValueU <> ").AVBool True } }")
         (Assertion "package" "nginx" (Map.fromList [("installed", AVBool True)]))
       )
+  , testCase "Node -> Text via Dhall.function (hostname projection)" $ do
+      f <- Dhall.input
+        (Dhall.function nodeEncoder Dhall.strictText)
+        "\\(n : { hostname : Text, ip : Optional Text, role : Text, tags : List Text }) -> n.hostname"
+      assertEqual "hostname projection"
+        "web01"
+        (f (Node "web01" Nothing (Role "Web") []))
+  , testCase "Node -> Text via Dhall.function (role/hostname interpolation)" $ do
+      f <- Dhall.input
+        (Dhall.function nodeEncoder Dhall.strictText)
+        "\\(n : { hostname : Text, ip : Optional Text, role : Text, tags : List Text }) -> \"${n.role}/${n.hostname}_spec.rb\""
+      assertEqual "by-role layout"
+        "Web/web01_spec.rb"
+        (f (Node "web01" (Just "10.0.1.10") (Role "Web") ["frontend"]))
   ]
 
 decodes :: (Eq a, Show a, Dhall.FromDhall a) => Text -> a -> IO ()

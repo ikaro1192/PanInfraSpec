@@ -10,8 +10,12 @@ module PanInfraSpec.IR
   , PlanFile (..)
   , Job (..)
   , ExecutionPlan (..)
+  , roleEncoder
+  , nodeEncoder
   ) where
 
+import Data.Functor.Contravariant (contramap, (>$<))
+import Data.Functor.Contravariant.Divisible (divided)
 import Data.Map.Strict (Map)
 import Data.String (IsString)
 import Data.Text (Text)
@@ -42,6 +46,29 @@ instance Dhall.FromDhall Node where
       <*> Dhall.field "ip"       Dhall.auto
       <*> Dhall.field "role"     Dhall.auto
       <*> Dhall.field "tags"     Dhall.auto
+
+-- | Encoder for 'Role'. Wraps Text via the Role newtype unwrap. Needed so a
+-- Dhall function value @\\(n : Inventory.Node) -> ...@ can be applied
+-- host-by-host: dhall must inject the Haskell 'Node' back into a Dhall record
+-- before evaluating the user's function. See 'PanInfraSpec.Layout'.
+roleEncoder :: Dhall.Encoder Role
+roleEncoder = contramap unRole Dhall.inject
+
+-- | Encoder for 'Node'. The field set and types must match
+-- @dhall/Inventory.dhall@'s @Node@ exactly, otherwise the user's
+-- @\\(n : Inventory.Node) -> ...@ will not type-check at evaluation time.
+--
+-- 'Dhall.RecordEncoder' is not a 'Semigroup' in dhall-1.42, so we build the
+-- record by composing field encoders through 'Divisible' ('divided') and
+-- splaying 'Node' into a right-nested tuple.
+nodeEncoder :: Dhall.Encoder Node
+nodeEncoder = Dhall.recordEncoder $
+  splay >$< (Dhall.encodeFieldWith "hostname" Dhall.inject
+       `divided` (Dhall.encodeFieldWith "ip" Dhall.inject
+       `divided` (Dhall.encodeFieldWith "role" roleEncoder
+       `divided`  Dhall.encodeFieldWith "tags" Dhall.inject)))
+  where
+    splay n = (hostname n, (ip n, (role n, tags n)))
 
 -- | Comparison operator for 'AVCompare'. Mirrors the Dhall union
 -- @< Lt | Le | Gt | Ge | Eq | Match >@. Used for matchers like
