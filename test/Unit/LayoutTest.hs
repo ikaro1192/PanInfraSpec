@@ -20,10 +20,16 @@ tests = testGroup "Layout"
       assertEqual "" "Rakefile"       (lRakefilePath defaultLayout)
   , testCase "validateLayoutPath: empty rejected" $
       assertLeftContains "empty" (validateLayoutPath "")
-  , testCase "validateLayoutPath: absolute rejected" $
+  , testCase "validateLayoutPath: POSIX absolute rejected" $
       assertLeftContains "absolute" (validateLayoutPath "/etc/passwd")
-  , testCase "validateLayoutPath: traversal rejected" $
+  , testCase "validateLayoutPath: Windows drive-letter absolute rejected" $
+      assertLeftContains "absolute" (validateLayoutPath "C:\\Windows\\foo.rb")
+  , testCase "validateLayoutPath: leading backslash rejected" $
+      assertLeftContains "absolute" (validateLayoutPath "\\foo\\bar.rb")
+  , testCase "validateLayoutPath: traversal rejected (forward slash)" $
       assertLeftContains "escapes" (validateLayoutPath "../escape/here.rb")
+  , testCase "validateLayoutPath: traversal rejected (backslash)" $
+      assertLeftContains "escapes" (validateLayoutPath "a\\..\\b.rb")
   , testCase "validateLayoutPath: NUL rejected" $
       assertLeftContains "forbidden" (validateLayoutPath "ok\NULnope.rb")
   , testCase "validateLayoutPath: nested OK" $

@@ -8,7 +8,8 @@ module PanInfraSpec.Layout
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Dhall
-import System.FilePath (isAbsolute, splitDirectories)
+import qualified System.FilePath.Posix as Posix
+import qualified System.FilePath.Windows as Windows
 
 import PanInfraSpec.IR (Node (..), nodeEncoder)
 
@@ -57,16 +58,28 @@ loadLayout path = do
 -- filesystem. Empty, absolute, traversing (@..@), and control-character paths
 -- are all rejected.
 --
--- We deliberately do not reject Windows drive letters explicitly: 'isAbsolute'
--- on Windows already covers @C:\\@; on POSIX a string like @"C:foo"@ is just a
--- relative path with a colon, which Serverspec users do not produce in
--- practice.
+-- 'System.FilePath.isAbsolute' is host-platform-specific: on Windows it
+-- returns 'False' for @\/etc\/passwd@ because there is no drive letter, while
+-- on POSIX it returns 'False' for @C:\\foo@. To make the validation behave the
+-- same on every CI runner we evaluate /both/ the POSIX and Windows rules and
+-- also reject any path that simply begins with a separator (@\\foo@ alone has
+-- no drive letter on Windows but still escapes 'outDir').
 validateLayoutPath :: FilePath -> Either Text FilePath
 validateLayoutPath p
-  | null p                            = Left "layout path is empty"
-  | isAbsolute p                      = Left ("absolute paths are not allowed in layout: " <> T.pack p)
-  | any (== "..") (splitDirectories p) = Left ("layout path escapes the output directory: " <> T.pack p)
-  | T.any forbidden (T.pack p)        = Left ("layout path contains forbidden characters: " <> T.pack p)
-  | otherwise                         = Right p
+  | null p              = Left "layout path is empty"
+  | hasLeadingSep p
+  || Posix.isAbsolute p
+  || Windows.isAbsolute p
+                        = Left ("absolute paths are not allowed in layout: " <> T.pack p)
+  -- Windows.splitDirectories splits on both @/@ and @\\@, so it surfaces a
+  -- traversal regardless of which separator the user wrote.
+  | any (== "..") (Windows.splitDirectories p)
+                        = Left ("layout path escapes the output directory: " <> T.pack p)
+  | T.any forbidden (T.pack p)
+                        = Left ("layout path contains forbidden characters: " <> T.pack p)
+  | otherwise           = Right p
   where
+    hasLeadingSep ('/':_)  = True
+    hasLeadingSep ('\\':_) = True
+    hasLeadingSep _        = False
     forbidden c = c == '\NUL' || c == '\n' || c == '\r'
