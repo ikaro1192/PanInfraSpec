@@ -1,17 +1,22 @@
 name: CI
 
 on:
+  # Only run `push` for main; PR branches are covered by `pull_request`.
+  # Triggering push on every branch caused push and pull_request to share
+  # the concurrency group below and cancel each other (re-running the
+  # canceled push then cancels the PR run, etc.). Restricting push to
+  # main eliminates the duplicate entirely.
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
 
 permissions:
   contents: read
 
-# Cancel duplicate runs from push + pull_request triggers on the same branch,
-# and supersede in-flight runs when a newer commit lands. `github.head_ref` is
-# set on pull_request events to the source branch and empty otherwise; falling
-# back to `github.ref_name` gives the same key for both event types.
+# Supersede in-flight runs when a newer commit lands on the same branch.
+# `github.head_ref` is set on pull_request events to the source branch and
+# empty otherwise; falling back to `github.ref_name` gives a stable key for
+# both event types.
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
