@@ -8,9 +8,20 @@ on:
 permissions:
   contents: read
 
+# Cancel duplicate runs from push + pull_request triggers on the same branch,
+# and supersede in-flight runs when a newer commit lands. `github.head_ref` is
+# set on pull_request events to the source branch and empty otherwise; falling
+# back to `github.ref_name` gives the same key for both event types.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: test (${{ matrix.os }})
+    # Default job timeout is 360 minutes; cap at 20 so a stuck cabal-test step
+    # surfaces as a quick failure instead of sitting for hours.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -51,4 +62,7 @@ jobs:
 
       - run: cabal update
       - run: cabal build all --enable-tests
-      - run: cabal test all --test-show-details=streaming
+      # `direct` connects the test executable's stdout/stderr straight to the
+      # job log instead of going through cabal's streaming pipe, which has been
+      # observed to deadlock at EOF on all three OSes.
+      - run: cabal test all --test-show-details=direct

@@ -10,6 +10,7 @@ permissions:
 jobs:
   test:
     name: test (${{ matrix.os }})
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -50,7 +51,7 @@ jobs:
 
       - run: cabal update
       - run: cabal build all --enable-tests
-      - run: cabal test all --test-show-details=streaming
+      - run: cabal test all --test-show-details=direct
 
   build-linux:
     name: build linux ${{ matrix.arch }}

@@ -1,7 +1,10 @@
 -- examples/inventory.dhall
 -- Sample inventory: 3 nodes. db01 has no IP to exercise Optional Text round-trip.
 
-let I = ../dhall/Inventory.dhall
+-- Resolves to the latest `main` of this repository.
+-- For production use, pin to a release tag (e.g. v0.2.0.0) and run
+-- `dhall freeze` to attach an integrity SHA-256 hash to this import.
+let I = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Inventory.dhall
 
 in  [ { hostname         = "web01"
       , ip               = Some "10.0.1.10"
