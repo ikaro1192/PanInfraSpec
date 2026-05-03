@@ -1,0 +1,4 @@
+- hosts: Web
+  roles: []
+- hosts: DBPrimary
+  roles: []

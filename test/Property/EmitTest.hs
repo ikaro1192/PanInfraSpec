@@ -9,6 +9,7 @@ import Test.Tasty.QuickCheck (testProperty, counterexample, forAll, Property)
 
 import PanInfraSpec.Emit (emitFor)
 import PanInfraSpec.Emit.Serverspec (AttrTag (..), serverspecSchema)
+import PanInfraSpec.Scaffold (defaultServerspecScaffold)
 import PanInfraSpec.IR
 import PanInfraSpec.Layout (defaultLayout)
 
@@ -98,7 +99,7 @@ genEnumerableAssertion = do
   (kind, key, tag) <- genKindKeyTag
   pk               <- genPrimaryKey kind
   val              <- genValue tag
-  pure (Assertion kind pk (Map.singleton key val))
+  pure (Assertion kind pk (Map.singleton key val) Nothing)
 
 -- | Wildcard-kind assertion: dynamic attr key, AVText value.
 genWildcardAssertion :: Gen Assertion
@@ -107,7 +108,7 @@ genWildcardAssertion = do
   pk   <- genPrimaryKey kind
   key  <- T.pack <$> shortAlphaNum
   val  <- AVText . T.pack <$> shortAlphaNum
-  pure (Assertion kind pk (Map.singleton key val))
+  pure (Assertion kind pk (Map.singleton key val) Nothing)
 
 -- | Two assertions sharing @(kind, primaryKey, attrKey)@ but disagreeing on
 -- the value. Builds the conflict the layer-3 fail-safe must catch.
@@ -126,8 +127,8 @@ genConflictingPair = do
   pk               <- genPrimaryKey kind
   v1               <- genValue tag
   v2               <- genValue tag `differentFrom` v1
-  pure ( Assertion kind pk (Map.singleton key v1)
-       , Assertion kind pk (Map.singleton key v2)
+  pure ( Assertion kind pk (Map.singleton key v1) Nothing
+       , Assertion kind pk (Map.singleton key v2) Nothing
        )
   where
     differentFrom :: Gen AttrValue -> AttrValue -> Gen AttrValue
@@ -142,7 +143,7 @@ genValidAssertionList :: Gen [Assertion]
 genValidAssertionList = dedupe <$> listOf genValidAssertion
   where
     dedupe = Map.elems . Map.fromList . map keyed
-    keyed a@(Assertion k pk attrs) =
+    keyed a@(Assertion k pk attrs _) =
       let attrKey = case Map.toAscList attrs of
                       ((ak, _) : _) -> ak
                       []            -> ""
@@ -153,7 +154,7 @@ genValidAssertionList = dedupe <$> listOf genValidAssertion
 prop_emit_total_for_valid :: Property
 prop_emit_total_for_valid = forAll genValidAssertionList $ \as ->
   let ep = ExecutionPlan "serverspec" [Job dummyNode as]
-  in case emitFor defaultLayout ep of
+  in case emitFor defaultServerspecScaffold defaultLayout ep of
        Right _ -> property True
        Left e  -> counterexample
          ("unexpected Left from emit: " <> T.unpack e <> "; input=" <> show as)
@@ -163,7 +164,7 @@ prop_emit_total_for_valid = forAll genValidAssertionList $ \as ->
 prop_conflict_caught :: Property
 prop_conflict_caught = forAll genConflictingPair $ \(a, b) ->
   let ep = ExecutionPlan "serverspec" [Job dummyNode [a, b]]
-  in case emitFor defaultLayout ep of
+  in case emitFor defaultServerspecScaffold defaultLayout ep of
        Left e | "conflicting attribute" `T.isInfixOf` e -> property True
        other -> counterexample
          ("expected Left with 'conflicting attribute', got: " <> show other
@@ -180,7 +181,7 @@ prop_conflict_caught = forAll genConflictingPair $ \(a, b) ->
 prop_no_unreachable_in_output :: Property
 prop_no_unreachable_in_output = forAll genValidAssertionList $ \as ->
   let ep = ExecutionPlan "serverspec" [Job dummyNode as]
-  in case emitFor defaultLayout ep of
+  in case emitFor defaultServerspecScaffold defaultLayout ep of
        Right outs ->
          let combined = T.concat (Map.elems outs)
          in if "UNREACHABLE" `T.isInfixOf` combined

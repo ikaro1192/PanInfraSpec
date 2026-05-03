@@ -25,8 +25,9 @@ import System.IO (hPutStrLn, stderr)
 import PanInfraSpec.Dhall (loadInventory, loadPlan, validate)
 import PanInfraSpec.DumpPlan (dumpPlan)
 import PanInfraSpec.Emit (emitFor)
+import PanInfraSpec.Scaffold (Scaffold, applyServerspecLayoutPaths, defaultServerspecScaffold, loadScaffold, validateLayoutScaffold)
 import PanInfraSpec.IR
-import PanInfraSpec.Layout (Layout, defaultLayout, loadLayout)
+import PanInfraSpec.Layout (Layout (..), defaultLayout, isLayoutV2, loadLayout)
 import PanInfraSpec.Resolve (matches, resolve)
 import PanInfraSpec.SoT (toNodes)
 import PanInfraSpec.SoT.Terraform (TerraformStateFile (..))
@@ -50,6 +51,7 @@ data Options = Options
   , optTarget    :: Text
   , optOut       :: FilePath
   , optLayout    :: Maybe FilePath
+  , optScaffold  :: Maybe FilePath
   , optOnlyRole  :: Maybe Text
   , optOnlyHost  :: Maybe Text
   , optOnlyTag   :: Maybe Text
@@ -94,6 +96,14 @@ parser = Options
        <> metavar "PATH"
        <> help "Path to a Dhall layout file (returns dhall/Layout.dhall's Layout). \
                \When omitted, files are written flat as <hostname>_spec.rb."
+        ))
+  <*> optional (strOption
+        ( long "scaffold"
+       <> metavar "PATH"
+       <> help "Path to a Dhall scaffold file (returns dhall/Scaffold.dhall's Scaffold). \
+               \When omitted, the built-in Serverspec scaffold is used and the layout's \
+               \helperPath / rakefilePath fields control the on-disk placement of \
+               \spec_helper.rb / Rakefile (pre-Scaffold behaviour)."
         ))
   <*> optional (strOption
         ( long "only-role"
@@ -159,6 +169,32 @@ resolveLayout = \case
       Right (Left e)  -> Left e
       Right (Right l) -> Right l
 
+-- | Resolve the active 'Scaffold'. When the user did not pass @--scaffold@,
+-- fall back to the built-in Serverspec scaffold, but rewrite its well-known
+-- @spec_helper.rb@ and @Rakefile@ paths from the v1 'Layout' so the
+-- pre-Scaffold-feature placement stays bit-for-bit identical.
+--
+-- When the user passed @--scaffold@, the scaffold owns all paths — the
+-- v1 'Layout''s @helperPath@ and @rakefilePath@ fields are ignored.
+resolveScaffold :: Maybe FilePath -> Layout -> IO (Either Text Scaffold)
+resolveScaffold Nothing layout
+  | isLayoutV2 layout =
+      -- v2 layout owns spec paths only; scaffold defaults stand for the
+      -- well-known auxiliary file names.
+      pure (Right defaultServerspecScaffold)
+  | otherwise =
+      pure $ Right $
+        applyServerspecLayoutPaths
+          (lHelperPath   layout)
+          (lRakefilePath layout)
+          defaultServerspecScaffold
+resolveScaffold (Just path) _ = do
+  res <- tryIO (loadScaffold path)
+  pure $ case res of
+    Left  e         -> Left e
+    Right (Left e)  -> Left e
+    Right (Right s) -> Right s
+
 -- | End-to-end pipeline. Returns 0 on success, 2 on any failure.
 run :: Options -> IO ExitCode
 run opts@Options{..} = do
@@ -184,9 +220,16 @@ run opts@Options{..} = do
                        layoutRes <- resolveLayout optLayout
                        case layoutRes of
                          Left e -> die ("layout load failed: " <> e)
-                         Right layout -> case emitFor layout ep of
-                           Left e     -> die ("emit failed: " <> e)
-                           Right outs -> writeAll optOut outs
+                         Right layout -> do
+                           scaffoldRes <- resolveScaffold optScaffold layout
+                           case scaffoldRes of
+                             Left e -> die ("scaffold load failed: " <> e)
+                             Right scaffold ->
+                               case validateLayoutScaffold scaffold layout of
+                                 Left e -> die ("layout/scaffold mismatch: " <> e)
+                                 Right () -> case emitFor scaffold layout ep of
+                                   Left e     -> die ("emit failed: " <> e)
+                                   Right outs -> writeAll optOut outs
 
 -- | Layer-1 check: the @--target@ flag must match the @targetBackend@ field
 -- the plan file forwards from its imported per-backend Dhall prelude.

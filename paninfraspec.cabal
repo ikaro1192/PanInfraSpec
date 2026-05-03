@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               paninfraspec
-version:            0.2.0.0
+version:            0.3.0.0
 synopsis:           Multi-input / multi-output compiler for infra specs (Phase 1: Serverspec)
 description:        Generates Serverspec Ruby files from per-backend Dhall preludes
                     via a Generic Semantic AST.
@@ -55,6 +55,7 @@ library
     , PanInfraSpec.Emit
     , PanInfraSpec.Emit.Serverspec
     , PanInfraSpec.DumpPlan
+    , PanInfraSpec.Scaffold
     , PanInfraSpec.SoT
     , PanInfraSpec.SoT.Terraform
     , PanInfraSpec.CLI
@@ -74,6 +75,8 @@ test-suite paninfraspec-test
       Unit.ValidateTest
     , Unit.LayoutTest
     , Unit.EmitCustomAttributesTest
+    , Unit.ScaffoldTest
+    , Unit.ModuleSplitTest
     , Roundtrip.DhallEncodingTest
     , Property.EmitTest
     , Synth.HundredHostsTest

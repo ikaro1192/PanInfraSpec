@@ -92,6 +92,13 @@ customAttributeEncoder = Dhall.recordEncoder $
 instance Dhall.ToDhall CustomAttribute where
   injectWith _ = customAttributeEncoder
 
+-- | 'ToDhall' instance for 'Node' lets @Dhall.inject@ derive an encoder for
+-- @[Node]@. Needed by 'PanInfraSpec.Scaffold' so a Dhall function value
+-- @\\(nodes : List Inventory.Node) -> ...@ can be applied to the resolved
+-- inventory at emit time.
+instance Dhall.ToDhall Node where
+  injectWith _ = nodeEncoder
+
 -- | Encoder for 'Node'. The field set and types must match
 -- @dhall/Inventory.dhall@'s @Node@ exactly, otherwise the user's
 -- @\\(n : Inventory.Node) -> ...@ will not type-check at evaluation time.
@@ -192,10 +199,19 @@ instance Dhall.FromDhall AttrValue where
 -- the underlying record could produce duplicates; 'Map.fromList' is
 -- last-write-wins. Layer 3 (the emitter) catches unknown keys; silent merge of
 -- duplicate keys is acceptable for Phase 1.
+--
+-- @aModule@ is an optional product label set by @Spec.module "name" […]@ in
+-- the Dhall plan. The emitter partitions merged groups by this label so a
+-- single host can produce multiple spec files (e.g. @Web/nginx_spec.rb@ and
+-- @Web/php_spec.rb@). 'Nothing' means "no module label" — those assertions
+-- land in the layout's default file. Module-aware splitting requires a v2
+-- 'PanInfraSpec.Layout.Layout'; v1 layouts collapse all modules into one
+-- file (which is the pre-module behaviour, byte-for-byte).
 data Assertion = Assertion
   { aKind       :: Text
   , aPrimaryKey :: Text
   , aAttrs      :: Map Text AttrValue
+  , aModule     :: Maybe Text
   }
   deriving stock (Show, Eq, Generic)
 
@@ -205,6 +221,7 @@ instance Dhall.FromDhall Assertion where
       <$> Dhall.field "kind"       Dhall.auto
       <*> Dhall.field "primaryKey" Dhall.auto
       <*> Dhall.field "attrs"      Dhall.auto
+      <*> Dhall.field "module"     Dhall.auto
 
 -- | Selects which nodes a 'Mapping' applies to. AND/OR/NOT are added in
 -- Phase 3 as additive constructors used for Haskell-side composition (e.g.,

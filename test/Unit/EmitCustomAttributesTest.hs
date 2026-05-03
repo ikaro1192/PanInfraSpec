@@ -7,6 +7,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import PanInfraSpec.Emit (emitFor)
+import PanInfraSpec.Scaffold (defaultServerspecScaffold)
 import PanInfraSpec.IR hiding (Assertion)
 import qualified PanInfraSpec.IR as IR
 import PanInfraSpec.Layout (defaultLayout)
@@ -33,7 +34,7 @@ tests = testGroup "customAttributes & ALRubyExpr"
 emitOne :: Node -> IR.Assertion -> Either Text Text
 emitOne node assertion =
   let ep = ExecutionPlan "serverspec" [Job node [assertion]]
-  in case emitFor defaultLayout ep of
+  in case emitFor defaultServerspecScaffold defaultLayout ep of
        Left e     -> Left e
        Right outs -> case Map.lookup (T.unpack (hostname node) <> "_spec.rb") outs of
          Just t  -> Right t
@@ -62,7 +63,7 @@ mysqlCompareExpr :: IO ()
 mysqlCompareExpr =
   let assertion = IR.Assertion "mysql_config" "innodb_buffer_pool_size"
         (Map.singleton "value"
-           (AVCompare OpGt (ALRubyExpr "paninfraspec_total_ram_kb.to_i * 1024 * 70 / 100")))
+           (AVCompare OpGt (ALRubyExpr "paninfraspec_total_ram_kb.to_i * 1024 * 70 / 100"))) Nothing
    in assertContains
         "its(:value) { should be > paninfraspec_total_ram_kb.to_i * 1024 * 70 / 100 }"
         (emitOne (emptyNode "web01") assertion)
@@ -72,7 +73,7 @@ phpCompareExpr :: IO ()
 phpCompareExpr =
   let assertion = IR.Assertion "php_config" "memory_limit"
         (Map.singleton "value"
-           (AVCompare OpLe (ALRubyExpr "paninfraspec_php_max_mb.to_i")))
+           (AVCompare OpLe (ALRubyExpr "paninfraspec_php_max_mb.to_i"))) Nothing
    in assertContains
         "its(:value) { should be <= paninfraspec_php_max_mb.to_i }"
         (emitOne (emptyNode "web01") assertion)
@@ -82,7 +83,7 @@ x509CompareExpr :: IO ()
 x509CompareExpr =
   let assertion = IR.Assertion "x509_certificate" "/etc/ssl/cert.pem"
         (Map.singleton "validity_in_days"
-           (AVCompare OpGe (ALRubyExpr "paninfraspec_min_cert_days.to_i")))
+           (AVCompare OpGe (ALRubyExpr "paninfraspec_min_cert_days.to_i"))) Nothing
    in assertContains
         "its(:validity_in_days) { should be >= paninfraspec_min_cert_days.to_i }"
         (emitOne (emptyNode "web01") assertion)
@@ -91,7 +92,7 @@ x509CompareExpr =
 -- on preamble behaviour.
 unameAssertion :: IR.Assertion
 unameAssertion = IR.Assertion "command" "uname -a"
-  (Map.singleton "exit-status" (AVNat 0))
+  (Map.singleton "exit-status" (AVNat 0)) Nothing
 
 withCustom :: [CustomAttribute] -> Node -> Node
 withCustom cas n = n { customAttributes = cas }
