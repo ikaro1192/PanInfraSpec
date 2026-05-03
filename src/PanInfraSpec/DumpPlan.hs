@@ -42,7 +42,7 @@ renderIp = \case
   Just a   -> "  ip=" <> a
 
 renderGroup :: Assertion -> Text
-renderGroup (Assertion k pk attrs) =
+renderGroup (Assertion k pk attrs _) =
   "│   ├── " <> k <> " " <> quoted pk <> " " <> renderAttrs attrs
 
 renderAttrs :: Map.Map Text AttrValue -> Text

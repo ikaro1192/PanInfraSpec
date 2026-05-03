@@ -45,6 +45,34 @@ By default the helpers use Serverspec's `:exec` backend (run locally on the
 target). Set `TARGET_HOST=<host>` in the environment to switch to SSH without
 editing the generated files.
 
+## Choosing a scaffold
+
+The *scaffold* owns the auxiliary files that wrap the per-host spec files —
+`Rakefile`, `spec_helper.rb`, and any inventory-derived inventory files
+(e.g. ansible_spec's `hosts` and `site.yml`). The default is `serverspec`;
+pass `--scaffold PATH` to load a different one.
+
+| Scaffold | Layout requirement | Extra files emitted |
+|---|---|---|
+| `dhall/Scaffold/Serverspec.dhall` (default) | any (v1 or v2) | `Rakefile`, `spec_helper.rb` |
+| `dhall/Scaffold/AnsibleSpec.dhall` | v2 (`L.ansibleSpec` recommended) | `Rakefile`, `spec_helper.rb`, `hosts`, `site.yml` |
+
+```sh
+cabal run paninfraspec-gen -- \
+  --inventory examples/inventory-ansible-spec.dhall \
+  --plan      examples/plan-with-modules.dhall \
+  --target    serverspec \
+  --layout    examples/layout-ansible-spec.dhall \
+  --scaffold  examples/scaffold-ansible-spec.dhall \
+  --out       /tmp/ansible-out
+```
+
+A scaffold is just a Dhall record with `staticFiles`, `derivedFiles`, and
+`builtinDerivers` — fork the shipped one and override individual files via
+`//`. See [`examples/scaffold-custom.dhall`](./examples/scaffold-custom.dhall)
+for the smallest possible fork (swap the Rakefile body, keep everything
+else) and [`docs/scaffold.md`](./docs/scaffold.md) for the full reference.
+
 ## Writing an inventory
 
 An inventory is a Dhall file that returns a list of nodes. See
@@ -111,6 +139,28 @@ The four selector helpers are:
 Mappings stack: a `Web`-role node tagged `metrics` in the example above
 receives the baseline check, the full nginx stack, *and* the Prometheus port.
 
+### Splitting a host's spec into multiple files
+
+Tag a list of assertions with `Spec.module_ "<name>"` to label them with a
+product or component. With a v2 layout (see "Customising the output
+layout" below) the generator partitions a single host's assertions across
+multiple spec files keyed off the label — e.g. `Web/nginx_spec.rb` and
+`Web/php_spec.rb` instead of one combined `Web/web01_spec.rb`. With a v1
+layout the labels are silently dropped and every assertion lands in the
+single per-host file (the pre-feature behaviour).
+
+```dhall
+Plan.forRole "Web"
+  ( Spec.module_ "nginx"
+      [ Spec.package "nginx" Spec.PackageState.Installed
+      , Spec.service "nginx" Spec.ServiceState.Running
+      ]
+  )
+```
+
+See [`examples/plan-with-modules.dhall`](./examples/plan-with-modules.dhall)
+for a complete example.
+
 ## Loading inventory from Terraform state
 
 Instead of hand-writing an inventory, point `--from-terraform-state` at a
@@ -156,11 +206,37 @@ generated `Rakefile` globs `*_spec.rb` in its own directory, so if you nest
 specs into subdirectories you may need a `Rakefile` per directory. The
 prelude ships `L.flat` (the default) and `L.byRole` ready-made.
 
+### v2 layouts (module-aware)
+
+The shape above (`Node -> Text`) is the *v1* layout. The *v2* layout takes
+an extra `Optional Text` argument carrying the module label set via
+`Spec.module_` (see "Splitting a host's spec into multiple files" above):
+
+```dhall
+let I = ../dhall/Inventory.dhall
+let L = ../dhall/Layout.dhall
+
+in  L.makeV2
+      { specPath =
+          \(n : I.Node) ->
+          \(m : Optional Text) ->
+            merge
+              { Some = \(name : Text) -> "${n.role}/${name}_spec.rb"
+              , None = "${n.role}/${n.hostname}_spec.rb"
+              }
+              m
+      }
+```
+
+Auxiliary file paths (`spec_helper.rb`, `Rakefile`, etc.) move out of the
+layout in v2 — they are owned by the scaffold instead. The prelude ships
+`L.byGroupProduct` and `L.ansibleSpec` ready-made.
+
 ## CLI reference
 
 ```
 Usage: paninfraspec-gen --inventory PATH --plan PATH --target BACKEND --out DIR
-                        [--layout PATH]
+                        [--layout PATH] [--scaffold PATH]
                         [--only-role ROLE] [--only-host HOST] [--only-tag TAG]
                         [--dump-plan]
 ```
@@ -173,8 +249,12 @@ Usage: paninfraspec-gen --inventory PATH --plan PATH --target BACKEND --out DIR
   Testinfra emitters are planned; each will ship with its own Dhall prelude
   and become a new value here.
 - `--out DIR` — output directory (created if missing).
-- `--layout PATH` — optional Dhall layout file (returns `Layout.Layout`).
-  When omitted, files are written flat as `<hostname>_spec.rb`.
+- `--layout PATH` — optional Dhall layout file (returns `Layout.Layout` or
+  `Layout.LayoutV2`). When omitted, files are written flat as
+  `<hostname>_spec.rb`.
+- `--scaffold PATH` — optional Dhall scaffold file (returns `Scaffold.Scaffold`).
+  When omitted, the built-in Serverspec scaffold is used. See "Choosing a
+  scaffold" above and [`docs/scaffold.md`](./docs/scaffold.md).
 - `--only-role ROLE` / `--only-host HOST` / `--only-tag TAG` — filter the
   inventory before resolution. Multiple flags are AND-composed.
 - `--dump-plan` — print the resolved plan as a tree and exit; no files are

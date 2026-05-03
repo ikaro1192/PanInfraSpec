@@ -2,11 +2,13 @@ module Roundtrip.DhallEncodingTest (tests) where
 
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
+import qualified Data.Text as T
 import qualified Dhall
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import PanInfraSpec.IR
+import qualified PanInfraSpec.IR as IR
 
 -- | The full @AttrValue@ union literal used by the Dhall prelude. Inlined
 -- here so each test case can disambiguate which constructor it picks.
@@ -81,11 +83,18 @@ tests = testGroup "Dhall round-trip"
       )
   , testCase "Selector.SelAll"   (decodes "(< SelAll | SelRole : Text | SelTag : Text | SelHost : Text >).SelAll"   SelAll)
   , testCase "Selector.SelRole"  (decodes "(< SelAll | SelRole : Text | SelTag : Text | SelHost : Text >).SelRole \"Web\"" (SelRole (Role "Web")))
-  , testCase "Assertion record"
+  , testCase "Assertion record (no module label)"
       (decodes
-        ("{ kind = \"package\", primaryKey = \"nginx\", attrs = toMap { installed = (" <> attrValueU <> ").AVBool True } }")
-        (Assertion "package" "nginx" (Map.fromList [("installed", AVBool True)]))
+        ("{ kind = \"package\", primaryKey = \"nginx\", attrs = toMap { installed = (" <> attrValueU <> ").AVBool True }, module = None Text }")
+        (Assertion "package" "nginx" (Map.fromList [("installed", AVBool True)]) Nothing)
       )
+  , testCase "Assertion record (with module label)"
+      (decodes
+        ("{ kind = \"service\", primaryKey = \"nginx\", attrs = toMap { running = (" <> attrValueU <> ").AVBool True }, module = Some \"nginx\" }")
+        (Assertion "service" "nginx" (Map.fromList [("running", AVBool True)]) (Just "nginx"))
+      )
+  , testCase "Spec.module_ tags every assertion in the list"
+      specModuleHelper
   , testCase "Node -> Text via Dhall.function (hostname projection)" $ do
       f <- Dhall.input
         (Dhall.function nodeEncoder Dhall.strictText)
@@ -106,3 +115,26 @@ decodes :: (Eq a, Show a, Dhall.FromDhall a) => Text -> a -> IO ()
 decodes src expected = do
   actual <- Dhall.input Dhall.auto src
   assertEqual "round-trip" expected actual
+
+-- | Build a `[ Spec.package "nginx" ..., Spec.service "nginx" ... ]` and
+-- pipe it through `Spec.module_ "nginx"`; every element should come back
+-- with `aModule = Just "nginx"`.
+specModuleHelper :: IO ()
+specModuleHelper = do
+  -- `Dhall.input` resolves imports relative to the CWD (project root in
+  -- the cabal test harness), so use `./dhall/...` rather than `../dhall/...`.
+  let src = T.intercalate "\n"
+        [ "let Spec = ./dhall/Serverspec.dhall"
+        , "in  Spec.module_ \"nginx\""
+        , "      [ Spec.package \"nginx\" Spec.PackageState.Installed"
+        , "      , Spec.service \"nginx\" Spec.ServiceState.Running"
+        , "      ]"
+        ]
+  -- Run from project root (where dhall/ lives) — same convention as the
+  -- ScaffoldTest fixture loader.
+  result <- Dhall.input Dhall.auto src
+  let assertions = result :: [IR.Assertion]
+  length assertions @?= 2
+  mapM_ (\a -> aModule a @?= Just "nginx") assertions
+  -- preserve original kinds in the same order
+  map aKind assertions @?= ["package", "service"]

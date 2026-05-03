@@ -23,8 +23,9 @@ import Prettyprinter (Doc, hsep, indent, pretty, punctuate, vsep, (<+>))
 import qualified Prettyprinter as PP
 import Prettyprinter.Render.Text (renderStrict)
 
+import PanInfraSpec.Scaffold (Scaffold (..), OutputFile (..), resolveBuiltinDerivers)
 import PanInfraSpec.IR
-import PanInfraSpec.Layout (Layout (..), validateLayoutPath)
+import PanInfraSpec.Layout (Layout (..), applySpecPath, isLayoutV2, validateLayoutPath)
 
 -- | Schema tag for an 'AttrValue'. Used by layer-3 validation only.
 data AttrTag
@@ -265,7 +266,7 @@ showVal = \case
 -- schema for that kind, every attr value's tag matches the expected tag, and
 -- per-kind primaryKey shape (port must be parseable as Natural).
 validateAssertion :: Assertion -> Either Text Assertion
-validateAssertion a@(Assertion k pk attrs) = do
+validateAssertion a@(Assertion k pk attrs _) = do
   kindSchema <- case Map.lookup k serverspecSchema of
     Just s  -> Right s
     Nothing -> Left ("unknown kind for serverspec: " <> k)
@@ -312,13 +313,32 @@ groupAssertions = map NE.fromList
 
 -- | Merge a same-resource group into one 'Assertion'. Conflicting attribute
 -- values trigger the layer-3 fail-safe so we never emit Ruby that's
--- guaranteed to fail at test time.
+-- guaranteed to fail at test time. Module labels are also consolidated:
+-- two assertions sharing @(kind, primaryKey)@ but disagreeing on their
+-- module label are rejected because the post-merge file split has nowhere
+-- coherent to place the result.
 mergeGroup :: NonEmpty Assertion -> Either Text Assertion
 mergeGroup (a :| rest) = foldM step a rest
   where
     step acc nxt = do
-      merged <- mergeAttrs (aKind acc) (aPrimaryKey acc) (aAttrs acc) (aAttrs nxt)
-      pure acc { aAttrs = merged }
+      mergedAttrs  <- mergeAttrs  (aKind acc) (aPrimaryKey acc) (aAttrs  acc) (aAttrs  nxt)
+      mergedModule <- mergeModule (aKind acc) (aPrimaryKey acc) (aModule acc) (aModule nxt)
+      pure acc { aAttrs = mergedAttrs, aModule = mergedModule }
+
+-- | Reject two assertions for the same @(kind, primaryKey)@ that disagree on
+-- their module label. The user has to either align the labels, drop them,
+-- or change the resource key — emitting the same describe block to two
+-- product files is not a sensible default.
+mergeModule
+  :: Text -> Text -> Maybe Text -> Maybe Text -> Either Text (Maybe Text)
+mergeModule _ _ a b | a == b = Right a
+mergeModule k pk a b = Left $
+  "conflicting module label for (" <> k <> ", " <> pk <> "): "
+    <> showMod a <> " vs " <> showMod b
+    <> " — assertions sharing a resource must agree on their module label or omit it"
+  where
+    showMod Nothing  = "(no module)"
+    showMod (Just m) = m
 
 mergeAttrs :: Text -> Text -> Map Text AttrValue -> Map Text AttrValue
            -> Either Text (Map Text AttrValue)
@@ -856,7 +876,7 @@ lookupText k m = case Map.lookup k m of
 -- header when the @_ini@ sentinel attribute is present (see Dhall
 -- @phpConfigWithIni@).
 formatGroup :: Assertion -> Either Text (Doc ann)
-formatGroup (Assertion k pk attrs0) = do
+formatGroup (Assertion k pk attrs0 _) = do
   let resource = pretty (kindToRubyResource k)
       (iniArg, attrs)
         | k == "php_config"
@@ -927,93 +947,80 @@ renderCustomAttributePreamble cas = vsep
   | ca <- cas
   ]
 
--- | Render a 'Job' as a @(filename, content)@ pair. The filename comes from
--- the Layout's 'lSpecPath' applied to the node, then validated to make sure
--- the user's Dhall function did not produce something that would write
--- outside the @--out@ directory.
-formatJob :: Layout -> Job -> Either Text (FilePath, Text)
+-- | Render a 'Job' as one or more @(filename, content)@ pairs. With a v1
+-- 'Layout' all assertions for a host land in a single file (the
+-- pre-module behaviour); with a v2 'Layout' assertions are partitioned
+-- by their module label so the same host can produce, e.g.,
+-- @Web/nginx_spec.rb@ and @Web/php_spec.rb@.
+--
+-- Order of operations: validate → group → merge (cross-module attribute
+-- and module-label conflicts surface here) → partition by module → render.
+-- Doing the merge BEFORE the partition is what preserves the
+-- "exit-status=0 vs exit-status=1 for the same command" safety net even
+-- when the conflicting commands sit in different module wrappers.
+formatJob :: Layout -> Job -> Either Text [(FilePath, Text)]
 formatJob layout (Job node assertions) = do
   validatedCAs <- validateCustomAttributes (customAttributes node)
   validated    <- traverse validateAssertion assertions
-  merged       <- traverse mergeGroup (groupAssertions validated)
-  blocks       <- traverse formatGroup merged
-  filename     <- validateLayoutPath (T.unpack (lSpecPath layout node))
-  let docText d = renderStrict (PP.layoutPretty PP.defaultLayoutOptions d)
-      preambleLines
-        | null validatedCAs = []
-        | otherwise         = [docText (renderCustomAttributePreamble validatedCAs)]
-      body = T.intercalate "\n\n"
-               ("require 'spec_helper'" : preambleLines ++ map docText blocks)
-  pure (filename, body <> "\n")
+  let normalized
+        | isLayoutV2 layout = validated
+        | otherwise         = map clearModule validated
+  merged       <- traverse mergeGroup (groupAssertions normalized)
+  let buckets = foldr addToBucket Map.empty merged
+  traverse (renderBucket validatedCAs) (Map.toAscList buckets)
+  where
+    clearModule a = a { aModule = Nothing }
 
--- | Static @spec_helper.rb@ produced alongside each output set. Uses the
--- @:exec@ backend by default; tweak @TARGET_HOST@ in the environment to
--- switch to ssh transport without editing this file.
-specHelperRb :: Text
-specHelperRb = T.unlines
-  [ "# Generated by paninfraspec-gen. Customise via environment, not in-place."
-  , "require 'serverspec'"
-  , ""
-  , "if ENV['TARGET_HOST'].nil? || ENV['TARGET_HOST'].empty?"
-  , "  set :backend, :exec"
-  , "else"
-  , "  require 'net/ssh'"
-  , "  set :backend, :ssh"
-  , "  set :host, ENV['TARGET_HOST']"
-  , "  set :ssh_options, Net::SSH::Config.for(ENV['TARGET_HOST'])"
-  , "  set :request_pty, true"
-  , "end"
-  , ""
-  , "RSpec.configure do |c|"
-  , "  c.color    = true"
-  , "  c.formatter = :documentation"
-  , "end"
-  ]
+    -- | Bucket merged assertions by module label. `foldr` + `Map.insertWith
+    -- (++)` together preserve the original `(kind, primaryKey)` ordering
+    -- inside each bucket, which keeps the rendered describe blocks stable
+    -- for golden tests.
+    addToBucket a = Map.insertWith (++) (aModule a) [a]
 
--- | Static @Rakefile@ wired to run all generated @*_spec.rb@ files. Uses
--- @Rake::FileList@ so empty directories raise loudly instead of silently
--- matching nothing.
-rakefile :: Text
-rakefile = T.unlines
-  [ "# Generated by paninfraspec-gen."
-  , "require 'rake'"
-  , "require 'rspec/core/rake_task'"
-  , ""
-  , "specs = Rake::FileList['*_spec.rb']"
-  , ""
-  , "if specs.empty?"
-  , "  abort 'no *_spec.rb files found in this directory'"
-  , "end"
-  , ""
-  , "RSpec::Core::RakeTask.new(:spec) do |t|"
-  , "  t.pattern    = specs"
-  , "  t.rspec_opts = '--format documentation --color'"
-  , "end"
-  , ""
-  , "task default: :spec"
-  ]
+    renderBucket cas (maybeMod, asserts) = do
+      blocks   <- traverse formatGroup asserts
+      filename <- validateLayoutPath
+                    (T.unpack (applySpecPath layout node maybeMod))
+      let docText d = renderStrict (PP.layoutPretty PP.defaultLayoutOptions d)
+          preambleLines
+            | null cas  = []
+            | otherwise = [docText (renderCustomAttributePreamble cas)]
+          body = T.intercalate "\n\n"
+                   ("require 'spec_helper'" : preambleLines ++ map docText blocks)
+      pure (filename, body <> "\n")
 
 -- | Top-level entry. Performs the backend guard, per-host emission with
 -- collision detection (so a non-injective 'lSpecPath' fails fast), and
--- finally drops the static helpers in. The helper / Rakefile paths must not
--- collide with any spec output path either.
-emit :: Layout -> ExecutionPlan -> Either Text (Map FilePath Text)
-emit layout ep
+-- finally drops the scaffold-supplied static and inventory-derived files
+-- in. Scaffold file paths must not collide with any spec output path or
+-- with each other.
+--
+-- Note: 'sDerivedFiles' is fed only the nodes that survived plan
+-- resolution (i.e. those that matched at least one mapping). Scaffolds
+-- that need every node from the inventory regardless of assertions —
+-- ansible_spec's @hosts@ is a candidate — should be invoked through
+-- inventory pathways once that channel exists. For Phase 1 the per-job
+-- node list is sufficient for both shipped scaffolds.
+emit :: Scaffold -> Layout -> ExecutionPlan -> Either Text (Map FilePath Text)
+emit scaffold layout ep
   | epTargetBackend ep /= "serverspec" =
       Left ("backend mismatch: expected serverspec, got " <> epTargetBackend ep)
   | otherwise = do
-      pairs   <- traverse (formatJob layout) (epJobs ep)
-      perHost <- foldM insertNoClash Map.empty pairs
-      helperPath   <- validateLayoutPath (T.unpack (lHelperPath   layout))
-      rakefilePath <- validateLayoutPath (T.unpack (lRakefilePath layout))
-      withHelper <- insertCommon "helperPath"   helperPath   specHelperRb perHost
-      insertCommon "rakefilePath" rakefilePath rakefile     withHelper
+      perJob  <- traverse (formatJob layout) (epJobs ep)
+      perHost <- foldM insertNoClash Map.empty (concat perJob)
+      let nodes  = jNode <$> epJobs ep
+          extras = sStaticFiles scaffold
+                ++ sDerivedFiles scaffold nodes
+                ++ resolveBuiltinDerivers nodes (sBuiltinDerivers scaffold)
+      foldM insertExtra perHost extras
   where
     insertNoClash acc (path, content) = case Map.lookup path acc of
       Just _  -> Left ("specPath collision at " <> T.pack path
                        <> ": multiple hosts mapped to the same output file")
       Nothing -> Right (Map.insert path content acc)
-    insertCommon label path content acc = case Map.lookup path acc of
-      Just _  -> Left (label <> " " <> T.pack path
-                       <> " collides with a generated spec file")
-      Nothing -> Right (Map.insert path content acc)
+    insertExtra acc OutputFile { ofPath = p, ofContent = c } = do
+      validated <- validateLayoutPath (T.unpack p)
+      case Map.lookup validated acc of
+        Just _  -> Left ("scaffold file " <> p
+                         <> " collides with a generated spec file or another scaffold file")
+        Nothing -> Right (Map.insert validated c acc)

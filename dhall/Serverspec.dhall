@@ -28,6 +28,7 @@ let Assertion =
       { kind       : Text
       , primaryKey : Text
       , attrs      : List { mapKey : Text, mapValue : AttrValue }
+      , module     : Optional Text
       }
 
 -- Phase 1 resource states ---------------------------------------------------
@@ -931,79 +932,79 @@ let service
     : Text -> ServiceState -> Assertion
     = \(name : Text) ->
       \(s : ServiceState) ->
-        { kind = "service", primaryKey = name, attrs = serviceStateAttrs s }
+        { kind = "service", primaryKey = name, attrs = serviceStateAttrs s, module = None Text }
 
 let package
     : Text -> PackageState -> Assertion
     = \(name : Text) ->
       \(s : PackageState) ->
-        { kind = "package", primaryKey = name, attrs = packageStateAttrs s }
+        { kind = "package", primaryKey = name, attrs = packageStateAttrs s, module = None Text }
 
 let port
     : Natural -> PortState -> Assertion
     = \(p : Natural) ->
       \(s : PortState) ->
-        { kind = "port", primaryKey = Natural/show p, attrs = portStateAttrs s }
+        { kind = "port", primaryKey = Natural/show p, attrs = portStateAttrs s, module = None Text }
 
 let file
     : Text -> FileState -> Assertion
     = \(path : Text) ->
       \(s : FileState) ->
-        { kind = "file", primaryKey = path, attrs = fileStateAttrs s }
+        { kind = "file", primaryKey = path, attrs = fileStateAttrs s, module = None Text }
 
 let command
     : Text -> CommandState -> Assertion
     = \(cmd : Text) ->
       \(s : CommandState) ->
-        { kind = "command", primaryKey = cmd, attrs = commandStateAttrs s }
+        { kind = "command", primaryKey = cmd, attrs = commandStateAttrs s, module = None Text }
 
 let user
     : Text -> UserState -> Assertion
     = \(name : Text) ->
       \(s : UserState) ->
-        { kind = "user", primaryKey = name, attrs = userStateAttrs s }
+        { kind = "user", primaryKey = name, attrs = userStateAttrs s, module = None Text }
 
 let group
     : Text -> GroupState -> Assertion
     = \(name : Text) ->
       \(s : GroupState) ->
-        { kind = "group", primaryKey = name, attrs = groupStateAttrs s }
+        { kind = "group", primaryKey = name, attrs = groupStateAttrs s, module = None Text }
 
 let process
     : Text -> ProcessState -> Assertion
     = \(name : Text) ->
       \(s : ProcessState) ->
-        { kind = "process", primaryKey = name, attrs = processStateAttrs s }
+        { kind = "process", primaryKey = name, attrs = processStateAttrs s, module = None Text }
 
 let mount
     : Text -> MountState -> Assertion
     = \(path : Text) ->
       \(s : MountState) ->
-        { kind = "mount", primaryKey = path, attrs = mountStateAttrs s }
+        { kind = "mount", primaryKey = path, attrs = mountStateAttrs s, module = None Text }
 
 let interface
     : Text -> InterfaceState -> Assertion
     = \(name : Text) ->
       \(s : InterfaceState) ->
-        { kind = "interface", primaryKey = name, attrs = interfaceStateAttrs s }
+        { kind = "interface", primaryKey = name, attrs = interfaceStateAttrs s, module = None Text }
 
 let kernelModule
     : Text -> KernelModuleState -> Assertion
     = \(name : Text) ->
       \(s : KernelModuleState) ->
-        { kind = "kernel-module", primaryKey = name, attrs = kernelModuleStateAttrs s }
+        { kind = "kernel-module", primaryKey = name, attrs = kernelModuleStateAttrs s, module = None Text }
 
 let bond
     : Text -> BondState -> Assertion
     = \(name : Text) ->
       \(s : BondState) ->
-        { kind = "bond", primaryKey = name, attrs = bondStateAttrs s }
+        { kind = "bond", primaryKey = name, attrs = bondStateAttrs s, module = None Text }
 
 let bridge
     : Text -> BridgeState -> Assertion
     = \(name : Text) ->
       \(s : BridgeState) ->
-        { kind = "bridge", primaryKey = name, attrs = bridgeStateAttrs s }
+        { kind = "bridge", primaryKey = name, attrs = bridgeStateAttrs s, module = None Text }
 
 -- defaultGateway is a singleton: takes no Text argument; primaryKey is fixed
 -- to the kind name to satisfy non-empty validation. The emitter omits the
@@ -1014,37 +1015,38 @@ let defaultGateway
         { kind = "default_gateway"
         , primaryKey = "default_gateway"
         , attrs = defaultGatewayStateAttrs s
+        , module = None Text
         }
 
 let host
     : Text -> HostState -> Assertion
     = \(name : Text) ->
       \(s : HostState) ->
-        { kind = "host", primaryKey = name, attrs = hostStateAttrs s }
+        { kind = "host", primaryKey = name, attrs = hostStateAttrs s, module = None Text }
 
 let ip6tables
     : Text -> Ip6tablesState -> Assertion
     = \(table : Text) ->
       \(s : Ip6tablesState) ->
-        { kind = "ip6tables", primaryKey = table, attrs = ip6tablesStateAttrs s }
+        { kind = "ip6tables", primaryKey = table, attrs = ip6tablesStateAttrs s, module = None Text }
 
 let ipfilter
     : Text -> IpfilterState -> Assertion
     = \(label : Text) ->
       \(s : IpfilterState) ->
-        { kind = "ipfilter", primaryKey = label, attrs = ipfilterStateAttrs s }
+        { kind = "ipfilter", primaryKey = label, attrs = ipfilterStateAttrs s, module = None Text }
 
 let ipnat
     : Text -> IpnatState -> Assertion
     = \(label : Text) ->
       \(s : IpnatState) ->
-        { kind = "ipnat", primaryKey = label, attrs = ipnatStateAttrs s }
+        { kind = "ipnat", primaryKey = label, attrs = ipnatStateAttrs s, module = None Text }
 
 let iptables
     : Text -> IptablesState -> Assertion
     = \(table : Text) ->
       \(s : IptablesState) ->
-        { kind = "iptables", primaryKey = table, attrs = iptablesStateAttrs s }
+        { kind = "iptables", primaryKey = table, attrs = iptablesStateAttrs s, module = None Text }
 
 -- routingTable is a singleton (no primary key); each HasEntry attaches one
 -- destination/gateway pair to the same describe block.
@@ -1054,6 +1056,7 @@ let routingTable
         { kind = "routing_table"
         , primaryKey = "routing_table"
         , attrs = routingTableStateAttrs s
+        , module = None Text
         }
 
 -- selinux is a singleton; the three states are mutually exclusive in practice
@@ -1065,6 +1068,7 @@ let selinux
         { kind = "selinux"
         , primaryKey = "selinux"
         , attrs = selinuxStateAttrs s
+        , module = None Text
         }
 
 let selinuxModule
@@ -1074,6 +1078,7 @@ let selinuxModule
         { kind = "selinux_module"
         , primaryKey = name
         , attrs = selinuxModuleStateAttrs s
+        , module = None Text
         }
 
 let linuxAuditSystem
@@ -1082,6 +1087,7 @@ let linuxAuditSystem
         { kind = "linux_audit_system"
         , primaryKey = "linux_audit_system"
         , attrs = linuxAuditSystemStateAttrs s
+        , module = None Text
         }
 
 let linuxKernelParameter
@@ -1091,13 +1097,14 @@ let linuxKernelParameter
         { kind = "linux_kernel_parameter"
         , primaryKey = name
         , attrs = linuxKernelParameterStateAttrs s
+        , module = None Text
         }
 
 let cgroup
     : Text -> CgroupState -> Assertion
     = \(name : Text) ->
       \(s : CgroupState) ->
-        { kind = "cgroup", primaryKey = name, attrs = cgroupStateAttrs s }
+        { kind = "cgroup", primaryKey = name, attrs = cgroupStateAttrs s, module = None Text }
 
 let windowsFeature
     : Text -> WindowsFeatureState -> Assertion
@@ -1106,6 +1113,7 @@ let windowsFeature
         { kind = "windows_feature"
         , primaryKey = name
         , attrs = windowsFeatureStateAttrs s
+        , module = None Text
         }
 
 -- cron is a singleton: there is only one cron table per host.
@@ -1115,6 +1123,7 @@ let cron
         { kind = "cron"
         , primaryKey = "cron"
         , attrs = cronStateAttrs s
+        , module = None Text
         }
 
 let x509Certificate
@@ -1124,6 +1133,7 @@ let x509Certificate
         { kind = "x509_certificate"
         , primaryKey = path
         , attrs = x509CertificateStateAttrs s
+        , module = None Text
         }
 
 let windowsRegistryKey
@@ -1133,6 +1143,7 @@ let windowsRegistryKey
         { kind = "windows_registry_key"
         , primaryKey = path
         , attrs = windowsRegistryKeyStateAttrs s
+        , module = None Text
         }
 
 -- Phase 3 smart constructors -------------------------------------------------
@@ -1141,25 +1152,25 @@ let lxc
     : Text -> LxcState -> Assertion
     = \(name : Text) ->
       \(s : LxcState) ->
-        { kind = "lxc", primaryKey = name, attrs = lxcStateAttrs s }
+        { kind = "lxc", primaryKey = name, attrs = lxcStateAttrs s, module = None Text }
 
 let mailAlias
     : Text -> MailAliasState -> Assertion
     = \(name : Text) ->
       \(s : MailAliasState) ->
-        { kind = "mail_alias", primaryKey = name, attrs = mailAliasStateAttrs s }
+        { kind = "mail_alias", primaryKey = name, attrs = mailAliasStateAttrs s, module = None Text }
 
 let ppa
     : Text -> PpaState -> Assertion
     = \(name : Text) ->
       \(s : PpaState) ->
-        { kind = "ppa", primaryKey = name, attrs = ppaStateAttrs s }
+        { kind = "ppa", primaryKey = name, attrs = ppaStateAttrs s, module = None Text }
 
 let yumrepo
     : Text -> YumrepoState -> Assertion
     = \(name : Text) ->
       \(s : YumrepoState) ->
-        { kind = "yumrepo", primaryKey = name, attrs = yumrepoStateAttrs s }
+        { kind = "yumrepo", primaryKey = name, attrs = yumrepoStateAttrs s, module = None Text }
 
 let iisAppPool
     : Text -> IisAppPoolState -> Assertion
@@ -1168,6 +1179,7 @@ let iisAppPool
         { kind = "iis_app_pool"
         , primaryKey = name
         , attrs = iisAppPoolStateAttrs s
+        , module = None Text
         }
 
 let iisWebsite
@@ -1177,6 +1189,7 @@ let iisWebsite
         { kind = "iis_website"
         , primaryKey = name
         , attrs = iisWebsiteStateAttrs s
+        , module = None Text
         }
 
 let mysqlConfig
@@ -1186,6 +1199,7 @@ let mysqlConfig
         { kind = "mysql_config"
         , primaryKey = name
         , attrs = mysqlConfigStateAttrs s
+        , module = None Text
         }
 
 -- phpConfig: single-arg form. The describe block becomes
@@ -1197,6 +1211,7 @@ let phpConfig
         { kind = "php_config"
         , primaryKey = name
         , attrs = phpConfigStateAttrs s
+        , module = None Text
         }
 
 -- phpConfigWithIni: two-arg form. The encoder injects an extra @_ini@
@@ -1215,6 +1230,7 @@ let phpConfigWithIni
                   , mapValue = AttrValue.AVText iniPath
                   }
                 ]
+        , module = None Text
         }
 
 let x509PrivateKey
@@ -1224,13 +1240,14 @@ let x509PrivateKey
         { kind = "x509_private_key"
         , primaryKey = path
         , attrs = x509PrivateKeyStateAttrs s
+        , module = None Text
         }
 
 let zfs
     : Text -> ZfsState -> Assertion
     = \(name : Text) ->
       \(s : ZfsState) ->
-        { kind = "zfs", primaryKey = name, attrs = zfsStateAttrs s }
+        { kind = "zfs", primaryKey = name, attrs = zfsStateAttrs s, module = None Text }
 
 let dockerContainer
     : Text -> DockerContainerState -> Assertion
@@ -1239,6 +1256,7 @@ let dockerContainer
         { kind = "docker_container"
         , primaryKey = name
         , attrs = dockerContainerStateAttrs s
+        , module = None Text
         }
 
 let dockerImage
@@ -1248,6 +1266,7 @@ let dockerImage
         { kind = "docker_image"
         , primaryKey = name
         , attrs = dockerImageStateAttrs s
+        , module = None Text
         }
 
 -- | Expand an Inventory custom-attribute @name@ into the Ruby variable name
@@ -1259,6 +1278,28 @@ let dockerImage
 let expand_attr
     : Text -> Text
     = \(name : Text) -> "paninfraspec_" ++ name
+
+-- | Tag every assertion in the list with a product label. The emitter then
+-- groups assertions by label so a single host can produce multiple spec
+-- files (e.g. @Web/nginx_spec.rb@ and @Web/php_spec.rb@). Module-aware
+-- splitting requires a v2 Layout; with a v1 Layout all modules collapse
+-- back into one file (the pre-module behaviour).
+--
+-- `List/map` is not a Dhall built-in so the implementation here uses
+-- `List/fold` to keep the prelude import-free.
+let module_
+    : Text -> List Assertion -> List Assertion
+    = \(name : Text) ->
+      \(xs   : List Assertion) ->
+        List/fold
+          Assertion
+          xs
+          (List Assertion)
+          ( \(a   : Assertion) ->
+            \(acc : List Assertion) ->
+              [ a // { module = Some name } ] # acc
+          )
+          ([] : List Assertion)
 
 in  { AttrValue         = AttrValue
     , AttrLeaf          = AttrLeaf
@@ -1351,5 +1392,9 @@ in  { AttrValue         = AttrValue
     , dockerImage           = dockerImage
     -- Custom-attribute references (Inventory.customAttributes)
     , expand_attr          = expand_attr
+    -- Product-label wrapper that tags assertions for per-module file split
+    -- (`module` is a Dhall reserved-ish word in some preludes, so the field
+    -- name uses an underscore suffix; users invoke it as `Spec.module_`).
+    , module_              = module_
     , targetBackend     = "serverspec"
     }
