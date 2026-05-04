@@ -16,11 +16,14 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.IO as TIO
+import Data.Version (showVersion)
 import Options.Applicative
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode (..))
 import System.FilePath (takeDirectory, (</>))
 import System.IO (hPutStrLn, stderr)
+
+import qualified Paths_paninfraspec as Paths
 
 import PanInfraSpec.Dhall (loadInventory, loadPlan, validate)
 import PanInfraSpec.DumpPlan (dumpPlan)
@@ -123,8 +126,15 @@ parser = Options
        <> help "Print the resolved ExecutionPlan as a tree and exit (no output written)"
         )
 
+versionOption :: Parser (a -> a)
+versionOption = infoOption (showVersion Paths.version)
+  ( long "version"
+ <> short 'V'
+ <> help "Print version and exit"
+  )
+
 parserInfo :: ParserInfo Options
-parserInfo = info (parser <**> helper)
+parserInfo = info (parser <**> helper <**> versionOption)
   ( fullDesc
  <> progDesc "Generate Serverspec specs from a Dhall inventory + plan"
  <> header   "paninfraspec-gen — multi-input / multi-output infra spec compiler"
