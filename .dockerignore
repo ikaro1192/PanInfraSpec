@@ -1,0 +1,9 @@
+.git
+.github
+.claude
+dist-newstyle
+out
+*.deb
+*.rpm
+*.tar.gz
+*.zip

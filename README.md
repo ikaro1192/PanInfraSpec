@@ -20,6 +20,23 @@ cabal build
 This produces the `paninfraspec-gen` executable. After it is built you only
 ever interact with Dhall files and the CLI — no Haskell knowledge required.
 
+### Docker (recommended for CI / one-shot use)
+
+```sh
+docker run --rm -v "$PWD":/work \
+  ghcr.io/ikaro1192/paninfraspec-gen:0.4 \
+  --inventory examples/inventory.dhall \
+  --plan      examples/plan.dhall \
+  --target    serverspec \
+  --out       /work/out
+```
+
+Each release publishes `latest`, the full version (`0.4.0.0`), and pin-friendly
+`major.minor` / `major.minor.patch` tags to
+[ghcr.io/ikaro1192/paninfraspec-gen](https://github.com/ikaro1192/PanInfraSpec/pkgs/container/paninfraspec-gen).
+Built for `linux/amd64` and `linux/arm64`. The image only generates spec files;
+running `rake spec` afterwards is still the user's responsibility.
+
 ## Quickstart
 
 ```sh
