@@ -24,8 +24,8 @@ let S = ../Scaffold.dhall
 let I = ../Inventory.dhall
 
 in  S.make
-      { name               = "serverspec"
-      , staticFiles        =
+      { name            = "serverspec"
+      , staticFiles     =
           [ { path    = "Rakefile"
             , content = ./Serverspec/Rakefile.template as Text
             }
@@ -33,7 +33,6 @@ in  S.make
             , content = ./Serverspec/spec_helper.rb.template as Text
             }
           ]
-      , derivedFiles       = \(_ : List I.Node) -> [] : List S.OutputFile
-      , builtinDerivers    = [] : List S.BuiltinDeriver
-      , requireModuleSplit = False
+      , derivedFiles    = \(_ : List I.Node) -> [] : List S.OutputFile
+      , builtinDerivers = [] : List S.BuiltinDeriver
       }

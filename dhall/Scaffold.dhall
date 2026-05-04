@@ -44,14 +44,10 @@ let ansibleSiteYml
     = \(p : Text) -> BuiltinDeriver.AnsibleSiteYml { path = p }
 
 let Scaffold : Type =
-      { name               : Text
-      , staticFiles        : List OutputFile
-      , derivedFiles       : List I.Node -> List OutputFile
-      , builtinDerivers    : List BuiltinDeriver
-      , requireModuleSplit : Bool
-        -- ^ When True, the CLI rejects v1 layouts. Use True for scaffolds
-        -- whose files depend on per-module file splitting (e.g.
-        -- ansible_spec's hosts / site.yml are keyed off the module name).
+      { name            : Text
+      , staticFiles     : List OutputFile
+      , derivedFiles    : List I.Node -> List OutputFile
+      , builtinDerivers : List BuiltinDeriver
       }
 
 let make

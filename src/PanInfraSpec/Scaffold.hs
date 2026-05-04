@@ -4,8 +4,6 @@ module PanInfraSpec.Scaffold
   , Scaffold (..)
   , defaultServerspecScaffold
   , loadScaffold
-  , applyServerspecLayoutPaths
-  , validateLayoutScaffold
   , resolveBuiltinDerivers
   , renderAnsibleHostsIni
   , renderAnsibleSiteYml
@@ -18,7 +16,6 @@ import qualified Data.Text as T
 import qualified Dhall
 
 import PanInfraSpec.IR (Node (..), Role (..))
-import PanInfraSpec.Layout (Layout, isLayoutV2)
 
 -- | A single file emitted alongside the per-host spec files. Mirrors the
 -- Dhall record @{ path : Text, content : Text }@ in @dhall/Scaffold.dhall@.
@@ -69,14 +66,10 @@ instance Dhall.FromDhall BuiltinDeriver where
 -- that Goss wants a @goss.yaml@, ...) lives in the shipped Dhall scaffold
 -- preludes under @dhall/Scaffold/@, not in this Haskell type.
 data Scaffold = Scaffold
-  { sName               :: Text
-  , sStaticFiles        :: [OutputFile]
-  , sDerivedFiles       :: [Node] -> [OutputFile]
-  , sBuiltinDerivers    :: [BuiltinDeriver]
-  , sRequireModuleSplit :: Bool
-    -- ^ When 'True', the CLI rejects v1 layouts because module-aware file
-    -- splitting is essential to the scaffold contract (e.g. ansible_spec
-    -- expects @<group>/<product>_spec.rb@ shaped output).
+  { sName            :: Text
+  , sStaticFiles     :: [OutputFile]
+  , sDerivedFiles    :: [Node] -> [OutputFile]
+  , sBuiltinDerivers :: [BuiltinDeriver]
   }
 
 instance Dhall.FromDhall Scaffold where
@@ -87,7 +80,6 @@ instance Dhall.FromDhall Scaffold where
       <*> Dhall.field "derivedFiles"
             (Dhall.function (Dhall.inject :: Dhall.Encoder [Node]) Dhall.auto)
       <*> Dhall.field "builtinDerivers"     Dhall.auto
-      <*> Dhall.field "requireModuleSplit"  Dhall.auto
 
 -- | The built-in Serverspec scaffold. Used when @--scaffold@ is omitted so
 -- the pre-Scaffold-feature output stays bit-for-bit identical. The shipped
@@ -95,14 +87,13 @@ instance Dhall.FromDhall Scaffold where
 -- (verified by golden test).
 defaultServerspecScaffold :: Scaffold
 defaultServerspecScaffold = Scaffold
-  { sName               = "serverspec"
-  , sStaticFiles        =
+  { sName            = "serverspec"
+  , sStaticFiles     =
       [ OutputFile { ofPath = "Rakefile",       ofContent = rakefileContent     }
       , OutputFile { ofPath = "spec_helper.rb", ofContent = specHelperContent   }
       ]
-  , sDerivedFiles       = const []
-  , sBuiltinDerivers    = []
-  , sRequireModuleSplit = False
+  , sDerivedFiles    = const []
+  , sBuiltinDerivers = []
   }
   where
     specHelperContent = T.unlines
@@ -152,37 +143,6 @@ loadScaffold path = do
   pure $ case res of
     Right s -> Right s
     Left  e -> Left (T.pack (show e))
-
--- | Reject combinations where the scaffold needs module-aware file splitting
--- (i.e. requires a v2 'Layout') but the user supplied a v1 'Layout'.
--- A 'Right' return is the silent OK case.
-validateLayoutScaffold :: Scaffold -> Layout -> Either Text ()
-validateLayoutScaffold s layout
-  | sRequireModuleSplit s && not (isLayoutV2 layout) =
-      Left $ "scaffold '" <> sName s
-          <> "' requires a v2 layout (Node -> Optional Text -> Text) "
-          <> "because its files (e.g. ansible_spec's site.yml / hosts) "
-          <> "are keyed off the per-module file split. Pass a v2 --layout."
-  | otherwise = Right ()
-
--- | Backwards-compatibility shim for the v1 'PanInfraSpec.Layout.Layout'
--- record, which carries @helperPath@ and @rakefilePath@ fields. Before the
--- scaffold layer existed, those fields placed @spec_helper.rb@ and
--- @Rakefile@ on disk. With the scaffold layer, file paths live in
--- 'sStaticFiles', so we patch the well-known names here when the user
--- relies on the default scaffold (i.e. no @--scaffold@ flag).
---
--- Only the matching well-known names are rewritten; other 'sStaticFiles'
--- entries are left alone. User-supplied scaffolds are not patched — once
--- the user opts into @--scaffold@, the scaffold owns all paths.
-applyServerspecLayoutPaths :: Text -> Text -> Scaffold -> Scaffold
-applyServerspecLayoutPaths helperPath rakefilePath s =
-  s { sStaticFiles = map patch (sStaticFiles s) }
-  where
-    patch o
-      | ofPath o == "Rakefile"       = o { ofPath = rakefilePath }
-      | ofPath o == "spec_helper.rb" = o { ofPath = helperPath }
-      | otherwise                    = o
 
 -- | Convert the scaffold's 'BuiltinDeriver' list into 'OutputFile' values
 -- by running the Haskell-side renderers against the supplied node list.

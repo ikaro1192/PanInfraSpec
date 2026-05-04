@@ -25,7 +25,7 @@ import Prettyprinter.Render.Text (renderStrict)
 
 import PanInfraSpec.Scaffold (Scaffold (..), OutputFile (..), resolveBuiltinDerivers)
 import PanInfraSpec.IR
-import PanInfraSpec.Layout (Layout (..), applySpecPath, isLayoutV2, validateLayoutPath)
+import PanInfraSpec.Layout (Layout (..), applySpecPath, validateLayoutPath)
 
 -- | Schema tag for an 'AttrValue'. Used by layer-3 validation only.
 data AttrTag
@@ -947,11 +947,9 @@ renderCustomAttributePreamble cas = vsep
   | ca <- cas
   ]
 
--- | Render a 'Job' as one or more @(filename, content)@ pairs. With a v1
--- 'Layout' all assertions for a host land in a single file (the
--- pre-module behaviour); with a v2 'Layout' assertions are partitioned
--- by their module label so the same host can produce, e.g.,
--- @Web/nginx_spec.rb@ and @Web/php_spec.rb@.
+-- | Render a 'Job' as one or more @(filename, content)@ pairs. Assertions
+-- are partitioned by their module label so the same host can produce,
+-- e.g., @Web/nginx_spec.rb@ and @Web/php_spec.rb@.
 --
 -- Order of operations: validate → group → merge (cross-module attribute
 -- and module-label conflicts surface here) → partition by module → render.
@@ -962,15 +960,10 @@ formatJob :: Layout -> Job -> Either Text [(FilePath, Text)]
 formatJob layout (Job node assertions) = do
   validatedCAs <- validateCustomAttributes (customAttributes node)
   validated    <- traverse validateAssertion assertions
-  let normalized
-        | isLayoutV2 layout = validated
-        | otherwise         = map clearModule validated
-  merged       <- traverse mergeGroup (groupAssertions normalized)
+  merged       <- traverse mergeGroup (groupAssertions validated)
   let buckets = foldr addToBucket Map.empty merged
   traverse (renderBucket validatedCAs) (Map.toAscList buckets)
   where
-    clearModule a = a { aModule = Nothing }
-
     -- | Bucket merged assertions by module label. `foldr` + `Map.insertWith
     -- (++)` together preserve the original `(kind, primaryKey)` ordering
     -- inside each bucket, which keeps the rendered describe blocks stable

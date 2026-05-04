@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               paninfraspec
-version:            0.3.0.0
+version:            0.4.0.0
 synopsis:           Multi-input / multi-output compiler for infra specs (Phase 1: Serverspec)
 description:        Generates Serverspec Ruby files from per-backend Dhall preludes
                     via a Generic Semantic AST.
