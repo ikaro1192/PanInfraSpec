@@ -36,6 +36,13 @@ RUN apt-get update \
       libgmp10 libffi8 libtinfo6 libstdc++6 \
  && rm -rf /var/lib/apt/lists/*
 
+# GHC's Text.IO derives stdout encoding from the locale. Debian's default
+# `LANG=C` is ASCII-only, so emitting any non-ASCII char from `--help`
+# (the help text contains an em dash) raises
+# `commitBuffer: invalid argument (cannot encode character '\8212')`.
+# C.UTF-8 is built into glibc on Bookworm — no `locales` package needed.
+ENV LANG=C.UTF-8
+
 COPY --from=builder /out/paninfraspec-gen /usr/local/bin/paninfraspec-gen
 
 WORKDIR /work
