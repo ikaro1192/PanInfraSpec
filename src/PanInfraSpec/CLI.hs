@@ -25,9 +25,9 @@ import System.IO (hPutStrLn, stderr)
 import PanInfraSpec.Dhall (loadInventory, loadPlan, validate)
 import PanInfraSpec.DumpPlan (dumpPlan)
 import PanInfraSpec.Emit (emitFor)
-import PanInfraSpec.Scaffold (Scaffold, applyServerspecLayoutPaths, defaultServerspecScaffold, loadScaffold, validateLayoutScaffold)
+import PanInfraSpec.Scaffold (Scaffold, defaultServerspecScaffold, loadScaffold)
 import PanInfraSpec.IR
-import PanInfraSpec.Layout (Layout (..), defaultLayout, isLayoutV2, loadLayout)
+import PanInfraSpec.Layout (Layout, defaultLayout, loadLayout)
 import PanInfraSpec.Resolve (matches, resolve)
 import PanInfraSpec.SoT (toNodes)
 import PanInfraSpec.SoT.Terraform (TerraformStateFile (..))
@@ -101,9 +101,7 @@ parser = Options
         ( long "scaffold"
        <> metavar "PATH"
        <> help "Path to a Dhall scaffold file (returns dhall/Scaffold.dhall's Scaffold). \
-               \When omitted, the built-in Serverspec scaffold is used and the layout's \
-               \helperPath / rakefilePath fields control the on-disk placement of \
-               \spec_helper.rb / Rakefile (pre-Scaffold behaviour)."
+               \When omitted, the built-in Serverspec scaffold is used."
         ))
   <*> optional (strOption
         ( long "only-role"
@@ -170,25 +168,10 @@ resolveLayout = \case
       Right (Right l) -> Right l
 
 -- | Resolve the active 'Scaffold'. When the user did not pass @--scaffold@,
--- fall back to the built-in Serverspec scaffold, but rewrite its well-known
--- @spec_helper.rb@ and @Rakefile@ paths from the v1 'Layout' so the
--- pre-Scaffold-feature placement stays bit-for-bit identical.
---
--- When the user passed @--scaffold@, the scaffold owns all paths — the
--- v1 'Layout''s @helperPath@ and @rakefilePath@ fields are ignored.
-resolveScaffold :: Maybe FilePath -> Layout -> IO (Either Text Scaffold)
-resolveScaffold Nothing layout
-  | isLayoutV2 layout =
-      -- v2 layout owns spec paths only; scaffold defaults stand for the
-      -- well-known auxiliary file names.
-      pure (Right defaultServerspecScaffold)
-  | otherwise =
-      pure $ Right $
-        applyServerspecLayoutPaths
-          (lHelperPath   layout)
-          (lRakefilePath layout)
-          defaultServerspecScaffold
-resolveScaffold (Just path) _ = do
+-- fall back to the built-in Serverspec scaffold.
+resolveScaffold :: Maybe FilePath -> IO (Either Text Scaffold)
+resolveScaffold Nothing = pure (Right defaultServerspecScaffold)
+resolveScaffold (Just path) = do
   res <- tryIO (loadScaffold path)
   pure $ case res of
     Left  e         -> Left e
@@ -221,15 +204,12 @@ run opts@Options{..} = do
                        case layoutRes of
                          Left e -> die ("layout load failed: " <> e)
                          Right layout -> do
-                           scaffoldRes <- resolveScaffold optScaffold layout
+                           scaffoldRes <- resolveScaffold optScaffold
                            case scaffoldRes of
                              Left e -> die ("scaffold load failed: " <> e)
-                             Right scaffold ->
-                               case validateLayoutScaffold scaffold layout of
-                                 Left e -> die ("layout/scaffold mismatch: " <> e)
-                                 Right () -> case emitFor scaffold layout ep of
-                                   Left e     -> die ("emit failed: " <> e)
-                                   Right outs -> writeAll optOut outs
+                             Right scaffold -> case emitFor scaffold layout ep of
+                               Left e     -> die ("emit failed: " <> e)
+                               Right outs -> writeAll optOut outs
 
 -- | Layer-1 check: the @--target@ flag must match the @targetBackend@ field
 -- the plan file forwards from its imported per-backend Dhall prelude.

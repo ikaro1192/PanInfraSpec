@@ -52,10 +52,10 @@ The *scaffold* owns the auxiliary files that wrap the per-host spec files —
 (e.g. ansible_spec's `hosts` and `site.yml`). The default is `serverspec`;
 pass `--scaffold PATH` to load a different one.
 
-| Scaffold | Layout requirement | Extra files emitted |
+| Scaffold | Recommended layout | Extra files emitted |
 |---|---|---|
-| `dhall/Scaffold/Serverspec.dhall` (default) | any (v1 or v2) | `Rakefile`, `spec_helper.rb` |
-| `dhall/Scaffold/AnsibleSpec.dhall` | v2 (`L.ansibleSpec` recommended) | `Rakefile`, `spec_helper.rb`, `hosts`, `site.yml` |
+| `dhall/Scaffold/Serverspec.dhall` (default) | default flat or `L.byGroupProduct` | `Rakefile`, `spec_helper.rb` |
+| `dhall/Scaffold/AnsibleSpec.dhall` | `L.ansibleSpec` | `Rakefile`, `spec_helper.rb`, `hosts`, `site.yml` |
 
 ```sh
 cabal run paninfraspec-gen -- \
@@ -142,12 +142,12 @@ receives the baseline check, the full nginx stack, *and* the Prometheus port.
 ### Splitting a host's spec into multiple files
 
 Tag a list of assertions with `Spec.module_ "<name>"` to label them with a
-product or component. With a v2 layout (see "Customising the output
-layout" below) the generator partitions a single host's assertions across
-multiple spec files keyed off the label — e.g. `Web/nginx_spec.rb` and
-`Web/php_spec.rb` instead of one combined `Web/web01_spec.rb`. With a v1
-layout the labels are silently dropped and every assertion lands in the
-single per-host file (the pre-feature behaviour).
+product or component. The generator partitions a single host's assertions
+across multiple spec files keyed off the label — e.g. `Web/nginx_spec.rb`
+and `Web/php_spec.rb` instead of one combined `Web/web01_spec.rb` —
+provided the layout's `specPath` actually uses the module argument
+(`L.byGroupProduct` and `L.ansibleSpec` do; layouts that ignore it will
+collapse modules back into one file).
 
 ```dhall
 Plan.forRole "Web"
@@ -170,18 +170,19 @@ the tag conventions and a full example.
 
 ## Customising the output layout
 
-By default each node lands at `<hostname>_spec.rb` directly under `--out`. If
-you want a different layout — say one directory per role — write a Dhall
-layout file and pass it with `--layout`:
+By default each node lands at `<hostname>_spec.rb` directly under `--out`
+(and `<hostname>_<module>_spec.rb` if you tagged assertions with
+`Spec.module_`). If you want a different shape — say one directory per
+role — write a Dhall layout file and pass it with `--layout`. The shipped
+prelude provides two ready-made layouts:
 
-```dhall
--- examples/layout-by-role.dhall
--- Pin to a tag and `dhall freeze` for production use.
-let L = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Layout.dhall
-in  L.byRole   -- spec files under <role>/<hostname>_spec.rb
-```
+- `L.byGroupProduct` — `<role>/<module>_spec.rb` when a module label is
+  set, `<role>/<hostname>_spec.rb` otherwise.
+- `L.ansibleSpec` — `spec/<role>/<module>_spec.rb` / `spec/<role>/<hostname>_spec.rb`,
+  matching the [ansible_spec gem's](https://github.com/volanja/ansible_spec)
+  Rakefile expectations.
 
-Or roll your own with the full Dhall expression power:
+Or roll your own:
 
 ```dhall
 -- Pin to a tag and `dhall freeze` for production use.
@@ -189,34 +190,6 @@ let I = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Inve
 let L = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Layout.dhall
 
 in  L.make
-      { specPath = \(n : I.Node) ->
-          "${n.role}/${n.hostname}_spec.rb"
-      , helperPath   = "spec_helper.rb"
-      , rakefilePath = "Rakefile"
-      }
-```
-
-`specPath` is a `Node -> Text` function; the generator applies it once per
-node. Paths are validated: empty, absolute (`/etc/passwd`), and traversing
-(`..`) results are rejected, and a `specPath` that maps two hosts to the same
-file fails fast rather than silently overwriting.
-
-`spec_helper.rb` and `Rakefile` are co-located with the spec files; the
-generated `Rakefile` globs `*_spec.rb` in its own directory, so if you nest
-specs into subdirectories you may need a `Rakefile` per directory. The
-prelude ships `L.flat` (the default) and `L.byRole` ready-made.
-
-### v2 layouts (module-aware)
-
-The shape above (`Node -> Text`) is the *v1* layout. The *v2* layout takes
-an extra `Optional Text` argument carrying the module label set via
-`Spec.module_` (see "Splitting a host's spec into multiple files" above):
-
-```dhall
-let I = ../dhall/Inventory.dhall
-let L = ../dhall/Layout.dhall
-
-in  L.makeV2
       { specPath =
           \(n : I.Node) ->
           \(m : Optional Text) ->
@@ -228,9 +201,18 @@ in  L.makeV2
       }
 ```
 
-Auxiliary file paths (`spec_helper.rb`, `Rakefile`, etc.) move out of the
-layout in v2 — they are owned by the scaffold instead. The prelude ships
-`L.byGroupProduct` and `L.ansibleSpec` ready-made.
+`specPath` is a `Node -> Optional Text -> Text` function. The first
+argument is the inventory node; the second is the optional module label
+set via `Spec.module_` in the plan. The generator applies it once per
+(node, module) bucket.
+
+Paths are validated: empty, absolute (`/etc/passwd`), and traversing
+(`..`) results are rejected, and a `specPath` that maps two buckets to the
+same file fails fast rather than silently overwriting.
+
+Auxiliary file paths (`spec_helper.rb`, `Rakefile`, ansible_spec's `hosts`
+and `site.yml`) are owned by the scaffold, not the layout — see "Choosing
+a scaffold" above.
 
 ## CLI reference
 
@@ -249,9 +231,9 @@ Usage: paninfraspec-gen --inventory PATH --plan PATH --target BACKEND --out DIR
   Testinfra emitters are planned; each will ship with its own Dhall prelude
   and become a new value here.
 - `--out DIR` — output directory (created if missing).
-- `--layout PATH` — optional Dhall layout file (returns `Layout.Layout` or
-  `Layout.LayoutV2`). When omitted, files are written flat as
-  `<hostname>_spec.rb`.
+- `--layout PATH` — optional Dhall layout file (returns `Layout.Layout`).
+  When omitted, files are written flat as `<hostname>_spec.rb` (and
+  `<hostname>_<module>_spec.rb` when `Spec.module_` is used).
 - `--scaffold PATH` — optional Dhall scaffold file (returns `Scaffold.Scaffold`).
   When omitted, the built-in Serverspec scaffold is used. See "Choosing a
   scaffold" above and [`docs/scaffold.md`](./docs/scaffold.md).

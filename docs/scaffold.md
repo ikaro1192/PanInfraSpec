@@ -21,21 +21,19 @@ Serverspec scaffold is used.
 
 ```dhall
 let Scaffold : Type =
-      { name               : Text
-      , staticFiles        : List OutputFile
-      , derivedFiles       : List Inventory.Node -> List OutputFile
-      , builtinDerivers    : List BuiltinDeriver
-      , requireModuleSplit : Bool
+      { name            : Text
+      , staticFiles     : List OutputFile
+      , derivedFiles    : List Inventory.Node -> List OutputFile
+      , builtinDerivers : List BuiltinDeriver
       }
 ```
 
 | Field | Purpose |
 |---|---|
-| `name` | Identifier surfaced in error messages (e.g. "scaffold 'ansible_spec' requires a v2 layout"). |
+| `name` | Identifier surfaced in error messages. |
 | `staticFiles` | Inventory-independent files. The Serverspec scaffold ships its `Rakefile` and `spec_helper.rb` here. |
 | `derivedFiles` | A Dhall function from the resolved node list to extra files. Use this when you can express the rendering in pure Dhall. |
 | `builtinDerivers` | Escape hatch for renderings that would be awkward in Dhall (text equality, INI parsing, etc.). Each entry names a shipped Haskell renderer plus the path it should land at. The shipped variants today are `AnsibleHostsIni` and `AnsibleSiteYml`. |
-| `requireModuleSplit` | When `True`, the CLI rejects v1 layouts — set this for scaffolds whose runner depends on per-module file splitting. The ansible_spec scaffold uses this. |
 
 `OutputFile` is `{ path : Text, content : Text }`. The path is relative
 to `--out`; the content is plain `Text`. To pull a Rakefile body out of a
@@ -99,9 +97,8 @@ The shipped ansible_spec scaffold:
   to surface the group, not enumerate roles.
 - Maps PanInfraSpec's module label (`Spec.module_ "nginx" […]`) to a per-
   group spec file under `spec/<group>/<module>_spec.rb`. Use the shipped
-  `L.ansibleSpec` layout to get this path shape.
-- Sets `requireModuleSplit = True`, so the CLI rejects v1 layouts that
-  cannot express the per-module file split.
+  `L.ansibleSpec` layout to get this path shape; the Rakefile globs that
+  shape directly.
 
 ### Multiple hosts in the same group
 

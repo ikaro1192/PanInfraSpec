@@ -23,16 +23,16 @@
 -- only needs to surface the group, not enumerate roles. Fork the scaffold
 -- if you need a populated `roles:` list.
 --
--- requireModuleSplit = True: the CLI rejects v1 layouts because the
--- generated Rakefile and per-group spec discovery presume the
--- `spec/<group>/<module>_spec.rb` shape.
+-- The shipped `L.ansibleSpec` layout produces the matching
+-- `spec/<group>/<module>_spec.rb` shape; pair it with this scaffold via
+-- `--layout`.
 
 let S = ../Scaffold.dhall
 let I = ../Inventory.dhall
 
 in  S.make
-      { name               = "ansible_spec"
-      , staticFiles        =
+      { name            = "ansible_spec"
+      , staticFiles     =
           [ { path    = "Rakefile"
             , content = ./AnsibleSpec/Rakefile.template as Text
             }
@@ -40,10 +40,9 @@ in  S.make
             , content = ./AnsibleSpec/spec_helper.rb.template as Text
             }
           ]
-      , derivedFiles       = \(_ : List I.Node) -> [] : List S.OutputFile
-      , builtinDerivers    =
+      , derivedFiles    = \(_ : List I.Node) -> [] : List S.OutputFile
+      , builtinDerivers =
           [ S.ansibleHostsIni "hosts"
           , S.ansibleSiteYml  "site.yml"
           ]
-      , requireModuleSplit = True
       }

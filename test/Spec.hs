@@ -10,12 +10,11 @@ import PanInfraSpec.Dhall (loadInventory, loadPlan, validate)
 import PanInfraSpec.Emit (emitFor)
 import PanInfraSpec.Scaffold
   ( Scaffold
-  , applyServerspecLayoutPaths
   , defaultServerspecScaffold
   , loadScaffold
   )
 import PanInfraSpec.IR (PlanFile (..))
-import PanInfraSpec.Layout (Layout (..), defaultLayout, loadLayout)
+import PanInfraSpec.Layout (Layout, defaultLayout, loadLayout)
 import PanInfraSpec.Resolve (resolve)
 
 import qualified Property.EmitTest
@@ -94,12 +93,8 @@ generateWith invPath planPath getLayout name = do
   nodes  <- loadInventory invPath
   pf     <- loadPlan      planPath
   layout <- getLayout
-  let scaffold = applyServerspecLayoutPaths
-                   (lHelperPath   layout)
-                   (lRakefilePath layout)
-                   defaultServerspecScaffold
-      plan = resolve "serverspec" nodes (pfMappings pf)
-  case validate plan >>= emitFor scaffold layout of
+  let plan = resolve "serverspec" nodes (pfMappings pf)
+  case validate plan >>= emitFor defaultServerspecScaffold layout of
     Left e -> error ("emit failed: " <> show e)
     Right outs -> case Map.lookup name outs of
       Just t  -> pure (LBS.fromStrict (TE.encodeUtf8 t))
