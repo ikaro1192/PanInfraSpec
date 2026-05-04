@@ -4,6 +4,13 @@ FROM haskell:9.6.7 AS builder
 
 WORKDIR /src
 
+# `cabal.project.freeze` pins `zlib -bundled-c-zlib +pkg-config`, so the
+# Haskell zlib bindings need a system zlib + pkg-config at build time. The
+# official haskell:9.6.7 image (Debian Bookworm) ships neither.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends pkg-config zlib1g-dev \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY cabal.project cabal.project.freeze paninfraspec.cabal ./
 
 RUN cabal update \
