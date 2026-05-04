@@ -10,7 +10,7 @@ import PanInfraSpec.Emit (emitFor)
 import PanInfraSpec.Scaffold (defaultServerspecScaffold)
 import PanInfraSpec.IR hiding (Assertion)
 import qualified PanInfraSpec.IR as IR
-import PanInfraSpec.Layout (Layout (..), loadLayout)
+import PanInfraSpec.Layout (Layout (..), Sharing (..), loadLayout)
 
 tests :: TestTree
 tests = testGroup "module split"
@@ -61,6 +61,7 @@ conflictingModuleLabels =
         { lSpecPath = \n m -> case m of
             Just label -> "Web/" <> label <> "_" <> hostname n <> ".rb"
             Nothing    -> "Web/" <> hostname n <> ".rb"
+        , lSharing  = PerHost
         }
    in case emitWith layout
          [ webAssert "nginx" (Just "nginx")
@@ -77,6 +78,7 @@ conflictingModuleLabelsMixed =
         { lSpecPath = \n m -> case m of
             Just label -> "Web/" <> label <> "_" <> hostname n <> ".rb"
             Nothing    -> "Web/" <> hostname n <> ".rb"
+        , lSharing  = PerHost
         }
    in case emitWith layout
          [ webAssert "nginx" (Just "nginx")

@@ -45,7 +45,7 @@ tests = testGroup "Layout"
       assertEqual "by-role" "Web/web01_spec.rb" (f (mkNode "web01" "Web"))
       assertEqual "by-role for DB" "DBPrimary/db01_spec.rb" (f (mkNode "db01" "DBPrimary"))
   , testCase "emit: rejects non-injective specPath (collision)" $
-      let layout = Layout { lSpecPath = \_ _ -> "all_specs.rb" }
+      let layout = Layout { lSpecPath = \_ _ -> "all_specs.rb", lSharing = PerHost }
           ep    = ExecutionPlan "serverspec"
                     [ Job (mkNode "web01" "Web") [pingAssertion]
                     , Job (mkNode "web02" "Web") [pingAssertion]
@@ -62,7 +62,82 @@ tests = testGroup "Layout"
       in assertLeftContains "collides"
            (emitFor scaffold defaultLayout ep)
   , testCase "loadLayout: byGroupProduct fixture works" byGroupProductLoad
+  -- PerRole sharing: role-shared spec file across multiple hosts ----------
+  , testCase "PerRole: identical content across hosts merges into one file"
+      perRoleMergesIdenticalContent
+  , testCase "PerRole: differing content across hosts is an error"
+      perRoleRejectsDifferingContent
+  , testCase "PerRole: customAttributes rejected"
+      perRoleRejectsCustomAttributes
+  , testCase "loadLayout: byGroupProduct fixture is PerRole" byGroupProductIsPerRole
   ]
+
+-- | Two hosts in the same role with the same module-tagged assertion: PerRole
+-- collapses the role-shared path (`Web/nginx_spec.rb`) into a single output.
+perRoleMergesIdenticalContent :: IO ()
+perRoleMergesIdenticalContent =
+  let layout = Layout
+        { lSpecPath = \n m -> case m of
+            Just label -> unRole (role n) <> "/" <> label <> "_spec.rb"
+            Nothing    -> unRole (role n) <> "/" <> hostname n <> "_spec.rb"
+        , lSharing  = PerRole
+        }
+      moduleLabel = Just "nginx"
+      asserts =
+        [ Assertion "command" "uname -a"
+            (Map.fromList [("exit-status", AVNat 0)]) moduleLabel
+        ]
+      ep = ExecutionPlan "serverspec"
+             [ Job (mkNode "web01" "Web") asserts
+             , Job (mkNode "web02" "Web") asserts
+             ]
+  in case emitFor defaultServerspecScaffold layout ep of
+       Left e     -> assertFailure ("expected merge, got error: " <> T.unpack e)
+       Right outs -> do
+         assertBool "Web/nginx_spec.rb missing" $
+           Map.member "Web/nginx_spec.rb" outs
+         assertBool "no per-host nginx files should leak" $
+           not (Map.member "Web/web01_nginx_spec.rb" outs)
+
+-- | Same path, different assertion content (e.g. one host has an extra check)
+-- → PerRole cannot reconcile and must fail loudly.
+perRoleRejectsDifferingContent :: IO ()
+perRoleRejectsDifferingContent =
+  let layout = Layout
+        { lSpecPath = \n m -> case m of
+            Just label -> unRole (role n) <> "/" <> label <> "_spec.rb"
+            Nothing    -> unRole (role n) <> "/" <> hostname n <> "_spec.rb"
+        , lSharing  = PerRole
+        }
+      moduleLabel = Just "nginx"
+      base = Assertion "command" "uname -a"
+               (Map.fromList [("exit-status", AVNat 0)]) moduleLabel
+      extra = Assertion "command" "hostname"
+                (Map.fromList [("exit-status", AVNat 0)]) moduleLabel
+      ep = ExecutionPlan "serverspec"
+             [ Job (mkNode "web01" "Web") [base]
+             , Job (mkNode "web02" "Web") [base, extra]
+             ]
+  in assertLeftContains "differing spec contents"
+       (emitFor defaultServerspecScaffold layout ep)
+
+-- | PerRole layout + a host with non-empty customAttributes → emit refuses
+-- because per-host preamble values cannot live in a role-shared file.
+perRoleRejectsCustomAttributes :: IO ()
+perRoleRejectsCustomAttributes =
+  let layout = Layout
+        { lSpecPath = \n m -> case m of
+            Just label -> unRole (role n) <> "/" <> label <> "_spec.rb"
+            Nothing    -> unRole (role n) <> "/" <> hostname n <> "_spec.rb"
+        , lSharing  = PerRole
+        }
+      asserts = [ Assertion "command" "uname -a"
+                    (Map.fromList [("exit-status", AVNat 0)]) (Just "nginx") ]
+      noisyNode = (mkNode "web01" "Web")
+        { customAttributes = [CustomAttribute "ram" "free -k"] }
+      ep = ExecutionPlan "serverspec" [ Job noisyNode asserts ]
+  in assertLeftContains "PerRole layout does not support customAttributes"
+       (emitFor defaultServerspecScaffold layout ep)
 
 byGroupProductLoad :: IO ()
 byGroupProductLoad = do
@@ -79,6 +154,15 @@ byGroupProductLoad = do
       assertEqual "without module"
         "Web/web01_spec.rb"
         (applySpecPath l (mkNode "web01" "Web") Nothing)
+
+-- | byGroupProduct now declares itself PerRole. Make sure the Dhall fixture
+-- decoder picks that up so the role-shared spec semantics are wired through.
+byGroupProductIsPerRole :: IO ()
+byGroupProductIsPerRole = do
+  r <- loadLayout "test/Golden/by_module/layout.dhall"
+  case r of
+    Left e  -> assertFailure ("loadLayout failed: " <> T.unpack e)
+    Right l -> assertEqual "" PerRole (lSharing l)
 
 mkNode :: Text -> Text -> Node
 mkNode h r = Node h Nothing (Role r) [] []

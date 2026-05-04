@@ -1,5 +1,6 @@
 module PanInfraSpec.Layout
   ( Layout (..)
+  , Sharing (..)
   , defaultLayout
   , loadLayout
   , validateLayoutPath
@@ -15,6 +16,26 @@ import qualified System.FilePath.Windows as Windows
 
 import PanInfraSpec.IR (Node (..), nodeEncoder)
 
+-- | How a layout maps inventory hosts onto output files.
+--
+-- 'PerHost' is the historic behaviour: every (node, module) pair must land
+-- on a distinct path; 'emit' fails fast if 'lSpecPath' is not injective
+-- across the inventory.
+--
+-- 'PerRole' acknowledges that a hostname-erased path
+-- (e.g. @\<role\>/\<module\>_spec.rb@) is intended to be shared across
+-- every host in the role. The emitter merges identical-content collisions
+-- into a single output file and rejects nodes that carry @customAttributes@
+-- (those are host-specific and cannot be expressed in a role-shared file).
+data Sharing = PerHost | PerRole
+  deriving stock (Eq, Show)
+
+instance Dhall.FromDhall Sharing where
+  autoWith _ = Dhall.union
+    (  (PerHost <$ Dhall.constructor "PerHost" Dhall.unit)
+    <> (PerRole <$ Dhall.constructor "PerRole" Dhall.unit)
+    )
+
 -- | How output files are laid out under @--out DIR@.
 --
 -- 'lSpecPath' is the closure decoded from the user's Dhall function of
@@ -24,10 +45,14 @@ import PanInfraSpec.IR (Node (..), nodeEncoder)
 -- (e.g. @Web/nginx_spec.rb@ + @Web/php_spec.rb@). Layouts that do not care
 -- about modules can ignore the argument.
 --
+-- 'lSharing' controls how the emitter resolves multiple jobs landing on
+-- the same path; see 'Sharing'.
+--
 -- Auxiliary file paths (Rakefile, spec_helper.rb, ...) are owned by the
 -- scaffold (see 'PanInfraSpec.Scaffold.sStaticFiles'), not by the layout.
-newtype Layout = Layout
+data Layout = Layout
   { lSpecPath :: Node -> Maybe Text -> Text
+  , lSharing  :: Sharing
   }
 
 -- | The pre-Layout-feature behaviour: hostnames at the top of @--out@.
@@ -38,6 +63,7 @@ defaultLayout = Layout
   { lSpecPath = \n m -> case m of
       Just label -> hostname n <> "_" <> label <> "_spec.rb"
       Nothing    -> hostname n <> "_spec.rb"
+  , lSharing  = PerHost
   }
 
 -- | Resolve the per-host (and optionally per-module) spec path. Forwards
@@ -46,14 +72,15 @@ applySpecPath :: Layout -> Node -> Maybe Text -> Text
 applySpecPath layout = lSpecPath layout
 
 -- | Decoder for the Layout shape:
--- @{ specPath : Node -> Optional Text -> Text }@.
+-- @{ specPath : Node -> Optional Text -> Text, sharing : < PerHost | PerRole > }@.
 decoder :: Dhall.Decoder Layout
 decoder = Dhall.record $
-  (\fn -> Layout { lSpecPath = fn })
+  Layout
     <$> Dhall.field "specPath"
           (Dhall.function nodeEncoder
              (Dhall.function (Dhall.inject :: Dhall.Encoder (Maybe Text))
                 Dhall.strictText))
+    <*> Dhall.field "sharing" Dhall.auto
 
 instance Dhall.FromDhall Layout where
   autoWith _ = decoder

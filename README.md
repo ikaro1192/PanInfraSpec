@@ -74,7 +74,7 @@ docker run --rm -v "$PWD":/work \
   --out       /work/out
 ```
 
-Each release publishes `latest`, the full version (`0.4.0.0`), and pin-friendly
+Each release publishes `latest`, the full version (`0.5.0.0`), and pin-friendly
 `major.minor` / `major.minor.patch` tags to
 [ghcr.io/ikaro1192/paninfraspec-gen](https://github.com/ikaro1192/PanInfraSpec/pkgs/container/paninfraspec-gen).
 Built for `linux/amd64` and `linux/arm64`. The image only generates spec files;
@@ -237,10 +237,28 @@ role — write a Dhall layout file and pass it with `--layout`. The shipped
 prelude provides two ready-made layouts:
 
 - `L.byGroupProduct` — `<role>/<module>_spec.rb` when a module label is
-  set, `<role>/<hostname>_spec.rb` otherwise.
+  set, `<role>/<hostname>_spec.rb` otherwise. **PerRole** (see below).
 - `L.ansibleSpec` — `spec/<role>/<module>_spec.rb` / `spec/<role>/<hostname>_spec.rb`,
   matching the [ansible_spec gem's](https://github.com/volanja/ansible_spec)
-  Rakefile expectations.
+  Rakefile expectations. **PerRole** (see below).
+
+### PerHost vs PerRole
+
+A layout declares how multiple hosts in the same role collapse onto
+output files:
+
+- **PerHost** (default; `L.make { specPath = ... }`) — every (node, module)
+  pair must map to a distinct file. The generator fails fast if `specPath`
+  is non-injective. Required when nodes carry `customAttributes`, since
+  those are per-host runtime values rendered into a host-specific preamble.
+- **PerRole** (`L.makePerRole { ... }`, also `L.byGroupProduct`,
+  `L.ansibleSpec`) — a `specPath` that drops the hostname (e.g.
+  `${role}/${module}_spec.rb`) is intended to be a role-shared file.
+  Multiple hosts in the same role merge into a single file when their
+  generated content matches; differing content fails. Per-host execution
+  is expected to come from the runner (the shipped ansible_spec Rakefile
+  iterates the inventory and sets `TARGET_HOST` per host). PerRole layouts
+  reject any node with non-empty `customAttributes`.
 
 Or roll your own:
 
