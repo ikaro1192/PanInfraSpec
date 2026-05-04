@@ -22,8 +22,17 @@ regenerate when your inventory changes.
 
 ## Install
 
+With [Homebrew](https://brew.sh/) (macOS):
+
 ```sh
 brew install ikaro1192/tap/paninfraspec
+```
+
+With [Nix](https://nixos.org/) (flakes enabled):
+
+```sh
+nix run github:ikaro1192/PanInfraSpec -- --help            # one-shot
+nix profile install github:ikaro1192/PanInfraSpec          # persistent install
 ```
 
 Pre-built tarballs, `.deb` / `.rpm` packages, a Docker image
@@ -81,7 +90,7 @@ The three input axes — **inventory**, **plan**, and (optionally) **layout** /
 
 ## Documentation
 
-- [Installation](./docs/install.md) — Homebrew, release tarballs, Docker, source
+- [Installation](./docs/install.md) — Homebrew, Nix, release tarballs, Docker, source
 - [Writing an inventory](./docs/inventory.md) — Dhall inventory + Terraform `tfstate` adapter
 - [Writing a plan](./docs/plan.md) — selectors, modules, per-host dynamic values
 - [Output layout](./docs/layout.md) — `--layout`, PerHost vs PerRole, path validation
