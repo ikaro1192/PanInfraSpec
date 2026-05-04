@@ -15,9 +15,12 @@ Usage: paninfraspec-gen (--inventory PATH | --from-terraform-state PATH)
   resources become nodes. Mutually exclusive with `--inventory`. See
   [`inventory.md`](./inventory.md#from-terraform-state).
 - `--plan PATH` — Dhall file returning `List Plan.Mapping`.
-- `--target BACKEND` — currently only `serverspec`. Goss, InSpec, and
-  Testinfra emitters are planned; each will ship with its own Dhall prelude
-  and become a new value here.
+- `--target BACKEND` — selects which emitter renders the spec files.
+  Backends are pluggable: today only `serverspec` is wired up, but the
+  architecture supports adding more without core changes (see
+  [`architecture.md`](./architecture.md)). InSpec is the next backend
+  planned; it will appear here as a new value once its emitter and Dhall
+  prelude ship.
 - `--out DIR` — output directory (created if missing).
 - `--layout PATH` — optional Dhall layout file (returns `Layout.Layout`).
   When omitted, files are written flat as `<hostname>_spec.rb` (and

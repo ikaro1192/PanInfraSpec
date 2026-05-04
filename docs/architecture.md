@@ -1,7 +1,7 @@
-# How it works
+# Architecture: how backends plug in
 
 ```
-Dhall preludes  ──►  Generic Semantic AST  ──►  per-backend emitter  ──►  out/<host>_spec.rb
+Dhall preludes  ──►  Generic Semantic IR  ──►  per-backend emitter  ──►  out/<host>_spec.rb
 ```
 
 The Dhall preludes use smart constructors so unsound combinations (e.g.
@@ -11,7 +11,11 @@ generator collects all assertions sharing a `(kind, primaryKey)` into one
 `exit-status = 0` and `exit-status = 1` for the same command), generation
 fails fast rather than emit Ruby that is guaranteed to fail at run time.
 
-The arrow above is drawn for Serverspec, but the AST and the emitter
-interface are backend-agnostic — Goss (YAML), InSpec, and Testinfra emitters
-are planned, and adding one is a new Dhall prelude plus a new emitter, with
-no changes to existing inputs.
+The arrow above is drawn for Serverspec, but the IR and the emitter
+interface are backend-agnostic. Adding a new backend is a new Dhall
+prelude plus a new emitter module — no changes to existing inputs, the
+IR, or other emitters. The dispatcher in
+[`src/PanInfraSpec/Emit.hs`](../src/PanInfraSpec/Emit.hs) routes on
+`--target`, and
+[`src/PanInfraSpec/Emit/Serverspec.hs`](../src/PanInfraSpec/Emit/Serverspec.hs)
+is the reference implementation. InSpec is the next backend planned.

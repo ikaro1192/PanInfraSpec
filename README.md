@@ -4,12 +4,21 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Haskell](https://img.shields.io/badge/language-Haskell-5D4F85)](https://www.haskell.org/)
 
-PanInfraSpec is a Dhall front-end for [Serverspec](https://serverspec.org/).
-You describe your nodes and the assertions they should satisfy in
-[Dhall](https://dhall-lang.org/), and `paninfraspec-gen` produces the
-matching `*_spec.rb`, `spec_helper.rb`, and `Rakefile` for you. PanInfraSpec
-**does not run tests** — Serverspec still does that. It just makes the spec
-files DRY, type-checked, and easy to regenerate when your inventory changes.
+PanInfraSpec is a pluggable, multi-target generator for infrastructure
+specs. You describe your nodes and the assertions they should satisfy
+once in [Dhall](https://dhall-lang.org/), and `paninfraspec-gen` emits
+the spec files for the backend you select with `--target`.
+[Serverspec](https://serverspec.org/) is the first shipped backend
+(`*_spec.rb`, `spec_helper.rb`, `Rakefile`);
+[InSpec](https://www.chef.io/products/chef-inspec) is planned. The
+codebase is built around a backend-agnostic semantic IR, so adding a
+new backend is a new Dhall prelude plus a new emitter — existing inputs,
+the IR, and other emitters do not change. See
+[`docs/architecture.md`](./docs/architecture.md).
+
+PanInfraSpec **does not run tests** — the backend's own runner still
+does that. It just makes the spec files DRY, type-checked, and easy to
+regenerate when your inventory changes.
 
 ## Install
 
@@ -49,14 +58,16 @@ editing the generated files.
 ## How it fits together
 
 ```
-Dhall preludes  ──►  Generic Semantic AST  ──►  per-backend emitter  ──►  out/<host>_spec.rb
+Dhall preludes  ──►  Generic Semantic IR  ──►  per-backend emitter  ──►  out/<host>_spec.rb
 ```
 
 The Dhall preludes use smart constructors so unsound combinations (e.g.
 `service "nginx" PackageState.Installed`) are rejected at parse time. The
-AST and emitter interface are backend-agnostic — Goss, InSpec, and
-Testinfra emitters are planned. See
-[`docs/architecture.md`](./docs/architecture.md) for the full pipeline.
+IR and emitter interface are backend-agnostic; adding a new backend is a
+new Dhall prelude plus a new emitter, with no changes to existing inputs,
+the IR, or other emitters. See
+[`docs/architecture.md`](./docs/architecture.md) for the full pipeline
+and the dispatcher / reference-emitter pointers.
 
 The three input axes — **inventory**, **plan**, and (optionally) **layout** /
 **scaffold** — compose freely:
@@ -77,7 +88,7 @@ The three input axes — **inventory**, **plan**, and (optionally) **layout** /
 - [Scaffolds](./docs/scaffold.md) — `--scaffold`, ansible_spec integration, custom forks
 - [CLI reference](./docs/cli.md) — every flag and exit code
 - [Resource catalogue](./docs/resources.md) — the 26 Serverspec resources Dhall exposes
-- [Architecture](./docs/architecture.md) — the AST and emitter pipeline
+- [Architecture](./docs/architecture.md) — the IR and emitter pipeline, where backends plug in
 
 See also:
 
