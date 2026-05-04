@@ -115,6 +115,18 @@ jobs:
           done
           ls -la out/
 
+      - name: Package tarball
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          NAME="paninfraspec-${VERSION}-linux-${{ matrix.arch }}"
+          mkdir -p "$NAME/bin"
+          cp staging/usr/local/bin/paninfraspec-gen "$NAME/bin/paninfraspec-gen"
+          cp LICENSE README.md "$NAME"/
+          mkdir -p out
+          tar -czf "out/$NAME.tar.gz" "$NAME"
+          ls -la out/
+
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.arch }}
