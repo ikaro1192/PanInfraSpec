@@ -51,7 +51,15 @@ jobs:
 
       - run: cabal update
       - run: cabal build all --enable-tests
-      - run: cabal test all --test-show-details=direct
+      - name: cabal test (POSIX)
+        if: runner.os != 'Windows'
+        run: cabal test all --test-show-details=direct
+      # Windows runners have been observed to hang in tasty's parallel scheduler
+      # during `cabal test all`; force the test executable to a single worker.
+      - name: cabal test (Windows, serialized)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: cabal test all --test-show-details=direct --test-options=--num-threads=1
 
   build-linux:
     name: build linux ${{ matrix.arch }}
