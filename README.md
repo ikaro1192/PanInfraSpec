@@ -13,6 +13,16 @@ files DRY, type-checked, and easy to regenerate when your inventory changes.
 
 ## Install
 
+### Homebrew (macOS)
+
+```sh
+brew install ikaro1192/tap/paninfraspec
+```
+
+The formula lives in [ikaro1192/homebrew-tap](https://github.com/ikaro1192/homebrew-tap)
+and builds `paninfraspec-gen` from source via `cabal-install` / `ghc` (pulled in
+as build dependencies). Works on both Apple Silicon and Intel Macs.
+
 ### From a release asset
 
 Pre-built `paninfraspec-gen` binaries are published on every tag at
