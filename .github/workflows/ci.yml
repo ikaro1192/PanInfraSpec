@@ -79,3 +79,40 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: cabal test all --test-show-details=direct --test-options=--num-threads=1
+
+  nix-build:
+    name: nix build
+    # Nix builds pull most deps from cache.nixos.org; only paninfraspec itself
+    # is built locally. 30 min leaves headroom if the binary cache is cold.
+    timeout-minutes: 30
+    # magic-nix-cache uses OIDC to authenticate against the GitHub Actions
+    # cache; `id-token: write` is required. Scope it to this job rather than
+    # the top-level permissions block so other jobs stay read-only.
+    permissions:
+      contents: read
+      id-token: write
+    # Linux only: macOS GitHub-hosted runners are several times slower and the
+    # Darwin builds in flake.nix mostly just re-validate cabal2nix wiring that
+    # is already exercised on Linux. The flake's other systems (aarch64-linux,
+    # x86_64-darwin, aarch64-darwin) remain declared for local/Nix users.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        # cachix/install-nix-action@v31.10.5
+        uses: cachix/install-nix-action@ab739621df7a23f52766f9ccc97f38da6b7af14f
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # Caches /nix/store paths built in this workflow to the GitHub Actions
+      # cache so subsequent runs skip rebuilding paninfraspec and any deps not
+      # already on cache.nixos.org. Free, no account/secret required.
+      - name: Set up Nix store cache
+        # DeterminateSystems/magic-nix-cache-action@v13
+        uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39
+
+      # Surface flake evaluation errors before the (slower) build step.
+      - run: nix flake show
+      - run: nix build .#paninfraspec --print-build-logs
