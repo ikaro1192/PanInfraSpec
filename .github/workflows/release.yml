@@ -325,6 +325,14 @@ jobs:
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@v6
+        # docker/build-push-action@v6 auto-uploads a `*.dockerbuild` build
+        # summary as a workflow artifact. Those files aren't valid zip
+        # archives, and the `release` job's `download-artifact@v4` (which
+        # pulls every artifact in the run) fails with "Artifact download
+        # failed after 5 retries" when it tries to extract them. Suppress
+        # the upload — the build summary is still visible in the run UI.
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
         with:
           context: .
           platforms: ${{ matrix.platform.name }}
