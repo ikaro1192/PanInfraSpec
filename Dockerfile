@@ -4,14 +4,15 @@ FROM haskell:9.6.7 AS builder
 
 WORKDIR /src
 
-# `cabal.project.freeze` pins `zlib -bundled-c-zlib +pkg-config`, so the
-# Haskell zlib bindings need a system zlib + pkg-config at build time. The
-# official haskell:9.6.7 image (Debian Bookworm) ships neither.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends pkg-config zlib1g-dev \
- && rm -rf /var/lib/apt/lists/*
-
 COPY . .
+
+# Switch the Haskell `zlib` binding to its bundled C source so the resulting
+# executable has no runtime dependency on libz.so.1 — that library is absent
+# from gcr.io/distroless/cc-debian12 where the binary is shipped, and was
+# causing `paninfraspec-gen --help` to fail with "cannot open shared object
+# file: libz.so.1". This mirrors the Windows release job's freeze patch.
+RUN sed -i 's/zlib -bundled-c-zlib +non-blocking-ffi +pkg-config/zlib +bundled-c-zlib +non-blocking-ffi -pkg-config/' cabal.project.freeze \
+ && grep '^             zlib ' cabal.project.freeze
 
 # A two-step "manifests first, sources later" layer split is tempting for
 # caching, but Cabal 3.10's `--only-dependencies` still preprocesses the
