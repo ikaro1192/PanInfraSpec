@@ -382,10 +382,13 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.image.outputs.name }}
+          # Cabal/PVP versions are 4-component (e.g. v0.4.0.6) so `type=semver`
+          # silently skips them — semver only accepts MAJOR.MINOR.PATCH.
+          # Match the Cabal shape explicitly with regex captures.
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}.{{patch}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=match,pattern=^v(\d+\.\d+\.\d+\.\d+)$,group=1
+            type=match,pattern=^v(\d+\.\d+\.\d+)\.\d+$,group=1
+            type=match,pattern=^v(\d+\.\d+)\.\d+\.\d+$,group=1
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
 
       - name: Create multi-arch manifest and push
