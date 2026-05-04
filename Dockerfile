@@ -6,11 +6,10 @@ WORKDIR /src
 
 COPY . .
 
-# Switch the Haskell `zlib` binding to its bundled C source so the resulting
-# executable has no runtime dependency on libz.so.1 — that library is absent
-# from gcr.io/distroless/cc-debian12 where the binary is shipped, and was
-# causing `paninfraspec-gen --help` to fail with "cannot open shared object
-# file: libz.so.1". This mirrors the Windows release job's freeze patch.
+# Statically link zlib via the bundled C source so the runtime image
+# doesn't need libz.so.1. This mirrors the Windows release job's freeze
+# patch — the canonical freeze keeps `+pkg-config -bundled-c-zlib` for
+# native release builds where the runner has a system zlib.
 RUN sed -i 's/zlib -bundled-c-zlib +non-blocking-ffi +pkg-config/zlib +bundled-c-zlib +non-blocking-ffi -pkg-config/' cabal.project.freeze \
  && grep '^             zlib ' cabal.project.freeze
 
@@ -25,7 +24,17 @@ RUN cabal update \
       --overwrite-policy=always \
       --enable-executable-stripping
 
-FROM gcr.io/distroless/cc-debian12
+# Use Debian slim (not distroless) for the runtime: the GHC-produced binary
+# pulls in libgmp / libffi / libtinfo / libstdc++ via terminfo and base
+# runtime, and chasing each missing .so on distroless/cc one tag at a time
+# (libz.so.1 → libtinfo.so.6 → ...) was an endless game. apt resolves the
+# full closure in one shot.
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      libgmp10 libffi8 libtinfo6 libstdc++6 \
+ && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /out/paninfraspec-gen /usr/local/bin/paninfraspec-gen
 
