@@ -126,15 +126,44 @@ genConflictingPair = do
   (kind, key, tag) <- elements nonBoolEntries
   pk               <- genPrimaryKey kind
   v1               <- genValue tag
-  v2               <- genValue tag `differentFrom` v1
+  v2               <- differentFrom (genValue tag) v1
   pure ( Assertion kind pk (Map.singleton key v1) Nothing
        , Assertion kind pk (Map.singleton key v2) Nothing
        )
+
+-- | Roll the generator until it produces a value distinct from @v@, or fall
+-- back to a deterministic perturbation after the retry budget is exhausted.
+-- The naive @if v == v' then loop else pure v'@ shape was observed to hang
+-- for >17 minutes on Windows runners when the generator's effective domain
+-- is small (e.g. an empty 'AVList' or a single 'AVCompare' op).
+differentFrom :: Gen AttrValue -> AttrValue -> Gen AttrValue
+differentFrom g v = go (30 :: Int)
   where
-    differentFrom :: Gen AttrValue -> AttrValue -> Gen AttrValue
-    differentFrom g v = do
+    go 0 = pure (bumpAttrValue v)
+    go n = do
       v' <- g
-      if v == v' then differentFrom g v else pure v'
+      if v == v' then go (n - 1) else pure v'
+
+-- | Deterministic perturbation that preserves the 'AttrValue' constructor
+-- (so the result still matches the schema 'AttrTag' the caller asked for)
+-- while guaranteeing @bumpAttrValue v /= v@.
+bumpAttrValue :: AttrValue -> AttrValue
+bumpAttrValue = \case
+  AVText    t    -> AVText   (t <> "_x")
+  AVNat     n    -> AVNat    (n + 1)
+  AVBool    b    -> AVBool   (not b)
+  AVSymbol  t    -> AVSymbol (t <> "_x")
+  AVList    xs   -> AVList   (ALText "__paninfra_bump__" : xs)
+  AVRecord  m    -> AVRecord (Map.insert "__paninfra_bump__" (ALText "__bumped__") m)
+  AVCompare op l -> AVCompare (rotateOp op) l
+  where
+    rotateOp = \case
+      OpLt    -> OpLe
+      OpLe    -> OpGt
+      OpGt    -> OpGe
+      OpGe    -> OpEq
+      OpEq    -> OpMatch
+      OpMatch -> OpLt
 
 -- | Dedupe by @(kind, primaryKey, attrKey)@ so that random list generation
 -- doesn't accidentally synthesize conflicting assertions for the same

@@ -70,4 +70,12 @@ jobs:
       # `direct` connects the test executable's stdout/stderr straight to the
       # job log instead of going through cabal's streaming pipe, which has been
       # observed to deadlock at EOF on all three OSes.
-      - run: cabal test all --test-show-details=direct
+      - name: cabal test (POSIX)
+        if: runner.os != 'Windows'
+        run: cabal test all --test-show-details=direct
+      # Windows runners have been observed to hang in tasty's parallel scheduler
+      # during `cabal test all`; force the test executable to a single worker.
+      - name: cabal test (Windows, serialized)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: cabal test all --test-show-details=direct --test-options=--num-threads=1
