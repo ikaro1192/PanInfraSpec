@@ -25,8 +25,12 @@ import PanInfraSpec.IR (Node (..), nodeEncoder)
 -- 'PerRole' acknowledges that a hostname-erased path
 -- (e.g. @\<role\>/\<module\>_spec.rb@) is intended to be shared across
 -- every host in the role. The emitter merges identical-content collisions
--- into a single output file and rejects nodes that carry @customAttributes@
--- (those are host-specific and cannot be expressed in a role-shared file).
+-- into a single output file. @customAttributes@ are allowed as long as
+-- every host in the role declares the same set (matching @name@ and
+-- @command@); the rendered preamble runs against each host's Specinfra
+-- backend at runtime, so a role-shared file is correct. Divergent
+-- customAttributes between hosts in the same role surface as a
+-- differing-content error.
 data Sharing = PerHost | PerRole
   deriving stock (Eq, Show)
 

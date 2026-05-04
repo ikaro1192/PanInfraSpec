@@ -31,7 +31,7 @@ nix run github:ikaro1192/PanInfraSpec -- \
 nix profile install github:ikaro1192/PanInfraSpec
 
 # Pin to a specific release
-nix profile install github:ikaro1192/PanInfraSpec/v0.5.0.0
+nix profile install github:ikaro1192/PanInfraSpec/v0.5.1.0
 ```
 
 Supported systems: `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`,
@@ -98,14 +98,14 @@ upgrade tracking).
 
 ```sh
 docker run --rm -v "$PWD":/work \
-  ghcr.io/ikaro1192/paninfraspec-gen:0.4 \
+  ghcr.io/ikaro1192/paninfraspec-gen:0.5 \
   --inventory examples/inventory.dhall \
   --plan      examples/plan.dhall \
   --target    serverspec \
   --out       /work/out
 ```
 
-Each release publishes `latest`, the full version (`0.5.0.0`), and pin-friendly
+Each release publishes `latest`, the full version (`0.5.1.0`), and pin-friendly
 `major.minor` / `major.minor.patch` tags to
 [ghcr.io/ikaro1192/paninfraspec-gen](https://github.com/ikaro1192/PanInfraSpec/pkgs/container/paninfraspec-gen).
 Built for `linux/amd64` and `linux/arm64`. The image only generates spec

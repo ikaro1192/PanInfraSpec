@@ -21,16 +21,21 @@ output files:
 
 - **PerHost** (default; `L.make { specPath = ... }`) — every (node, module)
   pair must map to a distinct file. The generator fails fast if `specPath`
-  is non-injective. Required when nodes carry `customAttributes`, since
-  those are per-host runtime values rendered into a host-specific preamble.
+  is non-injective. Each host gets its own preamble, so per-host
+  `customAttributes` are unrestricted.
 - **PerRole** (`L.makePerRole { ... }`, also `L.byGroupProduct`,
   `L.ansibleSpec`) — a `specPath` that drops the hostname (e.g.
   `${role}/${module}_spec.rb`) is intended to be a role-shared file.
   Multiple hosts in the same role merge into a single file when their
   generated content matches; differing content fails. Per-host execution
   is expected to come from the runner (the shipped ansible_spec Rakefile
-  iterates the inventory and sets `TARGET_HOST` per host). PerRole layouts
-  reject any node with non-empty `customAttributes`.
+  iterates the inventory and sets `TARGET_HOST` per host).
+  `customAttributes` are allowed as long as every host in the role declares
+  the same set (matching `name` and `command`) — the rendered preamble uses
+  `Specinfra.backend.run_command(...)`, which executes against each host's
+  backend at runtime. If two hosts in the same role need different
+  `customAttributes`, emit fails with a content-mismatch error: align them
+  or split the role.
 
 ## Rolling your own
 

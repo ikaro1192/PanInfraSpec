@@ -21,8 +21,12 @@
 --            role are merged into a single output file when their generated
 --            content matches; per-host runs are expected to come from the
 --            scaffold-side runner (e.g. ansible_spec's Rakefile sets
---            TARGET_HOST per host). `customAttributes` are host-specific and
---            therefore rejected at emit time in PerRole mode.
+--            TARGET_HOST per host). `customAttributes` are allowed as long as
+--            every host in the role declares the same set (matching `name`
+--            and `command`); the preamble runs against each host's Specinfra
+--            backend at runtime, so a role-shared file is correct. Divergent
+--            customAttributes within a role surface as a content mismatch
+--            at emit time.
 
 let I = ./Inventory.dhall
 

@@ -67,8 +67,10 @@ tests = testGroup "Layout"
       perRoleMergesIdenticalContent
   , testCase "PerRole: differing content across hosts is an error"
       perRoleRejectsDifferingContent
-  , testCase "PerRole: customAttributes rejected"
-      perRoleRejectsCustomAttributes
+  , testCase "PerRole: identical customAttributes across hosts share one preamble"
+      perRoleAcceptsConsistentCustomAttributes
+  , testCase "PerRole: divergent customAttributes across hosts is an error"
+      perRoleRejectsDivergingCustomAttributes
   , testCase "loadLayout: byGroupProduct fixture is PerRole" byGroupProductIsPerRole
   ]
 
@@ -121,22 +123,65 @@ perRoleRejectsDifferingContent =
   in assertLeftContains "differing spec contents"
        (emitFor defaultServerspecScaffold layout ep)
 
--- | PerRole layout + a host with non-empty customAttributes → emit refuses
--- because per-host preamble values cannot live in a role-shared file.
-perRoleRejectsCustomAttributes :: IO ()
-perRoleRejectsCustomAttributes =
+-- | PerRole layout + every host in the role declaring the same
+-- customAttributes → emit collapses the role-shared spec into one file
+-- whose preamble appears exactly once. The preamble's
+-- @Specinfra.backend.run_command(...)@ resolves against each host's own
+-- backend at runtime, so a single shared file is correct.
+perRoleAcceptsConsistentCustomAttributes :: IO ()
+perRoleAcceptsConsistentCustomAttributes =
   let layout = Layout
         { lSpecPath = \n m -> case m of
             Just label -> unRole (role n) <> "/" <> label <> "_spec.rb"
             Nothing    -> unRole (role n) <> "/" <> hostname n <> "_spec.rb"
         , lSharing  = PerRole
         }
-      asserts = [ Assertion "command" "uname -a"
-                    (Map.fromList [("exit-status", AVNat 0)]) (Just "nginx") ]
-      noisyNode = (mkNode "web01" "Web")
+      moduleLabel = Just "nginx"
+      asserts =
+        [ Assertion "command" "uname -a"
+            (Map.fromList [("exit-status", AVNat 0)]) moduleLabel
+        ]
+      cas      = [CustomAttribute "ram" "free -k"]
+      mkHost h = (mkNode h "Web") { customAttributes = cas }
+      ep       = ExecutionPlan "serverspec"
+                   [ Job (mkHost "web01") asserts
+                   , Job (mkHost "web02") asserts
+                   ]
+  in case emitFor defaultServerspecScaffold layout ep of
+       Left e     -> assertFailure ("expected merge, got error: " <> T.unpack e)
+       Right outs -> case Map.lookup "Web/nginx_spec.rb" outs of
+         Nothing      -> assertFailure "Web/nginx_spec.rb missing"
+         Just content -> do
+           assertBool "preamble missing" $
+             "paninfraspec_ram = Specinfra.backend.run_command('free -k').stdout.strip"
+               `T.isInfixOf` content
+           assertEqual "preamble must appear exactly once" 1 $
+             T.count "paninfraspec_ram =" content
+
+-- | PerRole layout + two hosts in the same role declaring different
+-- customAttributes → emit fails because the rendered preamble differs and
+-- the role-shared file cannot represent both. The new error message points
+-- at customAttributes so the operator knows what to align.
+perRoleRejectsDivergingCustomAttributes :: IO ()
+perRoleRejectsDivergingCustomAttributes =
+  let layout = Layout
+        { lSpecPath = \n m -> case m of
+            Just label -> unRole (role n) <> "/" <> label <> "_spec.rb"
+            Nothing    -> unRole (role n) <> "/" <> hostname n <> "_spec.rb"
+        , lSharing  = PerRole
+        }
+      moduleLabel = Just "nginx"
+      asserts =
+        [ Assertion "command" "uname -a"
+            (Map.fromList [("exit-status", AVNat 0)]) moduleLabel
+        ]
+      hostA = (mkNode "web01" "Web")
         { customAttributes = [CustomAttribute "ram" "free -k"] }
-      ep = ExecutionPlan "serverspec" [ Job noisyNode asserts ]
-  in assertLeftContains "PerRole layout does not support customAttributes"
+      hostB = (mkNode "web02" "Web")
+        { customAttributes = [CustomAttribute "ram" "free -m"] }
+      ep = ExecutionPlan "serverspec"
+             [ Job hostA asserts, Job hostB asserts ]
+  in assertLeftContains "customAttributes"
        (emitFor defaultServerspecScaffold layout ep)
 
 byGroupProductLoad :: IO ()

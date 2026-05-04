@@ -999,7 +999,6 @@ emit scaffold layout ep
   | epTargetBackend ep /= "serverspec" =
       Left ("backend mismatch: expected serverspec, got " <> epTargetBackend ep)
   | otherwise = do
-      _       <- rejectCustomAttributesInPerRole (lSharing layout) (epJobs ep)
       perJob  <- traverse (formatJob layout) (epJobs ep)
       perHost <- foldM (insertSpec (lSharing layout)) Map.empty (concat perJob)
       let nodes  = jNode <$> epJobs ep
@@ -1011,7 +1010,12 @@ emit scaffold layout ep
     -- PerHost: any path collision is a hard error (historic behaviour).
     -- PerRole: identical content collapses into one file (the role-shared
     -- spec); differing content is an error because the role-shared file
-    -- cannot represent two distinct spec bodies.
+    -- cannot represent two distinct spec bodies. customAttributes are
+    -- expanded into a preamble that runs against each host's Specinfra
+    -- backend at runtime, so a role-shared file is fine as long as every
+    -- host in the role declares the same customAttributes (same name and
+    -- command, in the same order). Divergence shows up here as differing
+    -- content.
     insertSpec PerHost acc (path, content) = case Map.lookup path acc of
       Just _  -> Left ("specPath collision at " <> T.pack path
                        <> ": multiple hosts mapped to the same output file")
@@ -1022,7 +1026,8 @@ emit scaffold layout ep
         | otherwise           -> Left
             ("PerRole layout: hosts sharing " <> T.pack path
              <> " produced differing spec contents; ensure every host in the role"
-             <> " gets the same assertions or switch to a PerHost layout")
+             <> " gets the same assertions and the same customAttributes"
+             <> " (matching name and command), or switch to a PerHost layout")
       Nothing -> Right (Map.insert path content acc)
     insertExtra acc OutputFile { ofPath = p, ofContent = c } = do
       validated <- validateLayoutPath (T.unpack p)
@@ -1030,16 +1035,3 @@ emit scaffold layout ep
         Just _  -> Left ("scaffold file " <> p
                          <> " collides with a generated spec file or another scaffold file")
         Nothing -> Right (Map.insert validated c acc)
-
--- | PerRole layouts produce role-shared spec files; @customAttributes@ are
--- per-host runtime values bound in a host-specific preamble, which has no
--- meaning when the file is shared. Reject any node carrying customAttributes
--- so the misuse fails fast rather than producing silently inconsistent output.
-rejectCustomAttributesInPerRole :: Sharing -> [Job] -> Either Text ()
-rejectCustomAttributesInPerRole PerHost _    = Right ()
-rejectCustomAttributesInPerRole PerRole jobs =
-  case [ hostname (jNode j) | j <- jobs, not (null (customAttributes (jNode j))) ] of
-    []   -> Right ()
-    h:_  -> Left
-      ("PerRole layout does not support customAttributes (host=" <> h
-       <> "); switch to a PerHost layout or remove the customAttributes")
