@@ -81,7 +81,7 @@ jobs:
         run: cabal test all --test-show-details=direct --test-options=--num-threads=1
 
   nix-build:
-    name: nix build (${{ matrix.os }})
+    name: nix build
     # Nix builds pull most deps from cache.nixos.org; only paninfraspec itself
     # is built locally. 30 min leaves headroom if the binary cache is cold.
     timeout-minutes: 30
@@ -91,13 +91,11 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    strategy:
-      fail-fast: false
-      # ubuntu-latest covers x86_64-linux and macos-latest covers aarch64-darwin,
-      # which are two of the four systems declared in flake.nix.
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    # Linux only: macOS GitHub-hosted runners are several times slower and the
+    # Darwin builds in flake.nix mostly just re-validate cabal2nix wiring that
+    # is already exercised on Linux. The flake's other systems (aarch64-linux,
+    # x86_64-darwin, aarch64-darwin) remain declared for local/Nix users.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
