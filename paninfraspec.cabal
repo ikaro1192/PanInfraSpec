@@ -59,6 +59,10 @@ library
     , PanInfraSpec.SoT
     , PanInfraSpec.SoT.Terraform
     , PanInfraSpec.CLI
+  autogen-modules:
+      Paths_paninfraspec
+  other-modules:
+      Paths_paninfraspec
 
 executable paninfraspec-gen
   import:           deps
