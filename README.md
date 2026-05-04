@@ -22,6 +22,8 @@ regenerate when your inventory changes.
 
 ## Install
 
+With [Homebrew](https://brew.sh/) (macOS):
+
 ```sh
 brew install ikaro1192/tap/paninfraspec
 ```
