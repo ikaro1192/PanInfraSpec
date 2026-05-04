@@ -34,7 +34,19 @@ FROM debian:bookworm-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       libgmp10 libffi8 libtinfo6 libstdc++6 \
+      ca-certificates \
  && rm -rf /var/lib/apt/lists/*
+# `ca-certificates` is required so Dhall's HTTPS imports (e.g.
+# `https://raw.githubusercontent.com/.../Inventory.dhall`) can validate the
+# server certificate; without it every example in the README fails with
+# "certificate has unknown CA".
+
+# GHC's Text.IO derives stdout encoding from the locale. Debian's default
+# `LANG=C` is ASCII-only, so emitting any non-ASCII char from `--help`
+# (the help text contains an em dash) raises
+# `commitBuffer: invalid argument (cannot encode character '\8212')`.
+# C.UTF-8 is built into glibc on Bookworm — no `locales` package needed.
+ENV LANG=C.UTF-8
 
 COPY --from=builder /out/paninfraspec-gen /usr/local/bin/paninfraspec-gen
 
