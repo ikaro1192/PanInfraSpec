@@ -4,12 +4,21 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Haskell](https://img.shields.io/badge/language-Haskell-5D4F85)](https://www.haskell.org/)
 
-PanInfraSpec is a Dhall front-end for [Serverspec](https://serverspec.org/).
-You describe your nodes and the assertions they should satisfy in
-[Dhall](https://dhall-lang.org/), and `paninfraspec-gen` produces the
-matching `*_spec.rb`, `spec_helper.rb`, and `Rakefile` for you. PanInfraSpec
-**does not run tests** — Serverspec still does that. It just makes the spec
-files DRY, type-checked, and easy to regenerate when your inventory changes.
+PanInfraSpec is a pluggable, multi-target generator for infrastructure
+specs. You describe your nodes and the assertions they should satisfy
+once in [Dhall](https://dhall-lang.org/), and `paninfraspec-gen` emits
+the spec files for the backend you select with `--target`.
+[Serverspec](https://serverspec.org/) is the first shipped backend
+(`*_spec.rb`, `spec_helper.rb`, `Rakefile`);
+[InSpec](https://www.chef.io/products/chef-inspec) is planned. The
+codebase is built around a backend-agnostic semantic IR, so adding a
+new backend is a new Dhall prelude plus a new emitter — existing inputs,
+the IR, and other emitters do not change. See
+[Architecture](#architecture-how-backends-plug-in).
+
+PanInfraSpec **does not run tests** — the backend's own runner still
+does that. It just makes the spec files DRY, type-checked, and easy to
+regenerate when your inventory changes.
 
 ## Install
 
@@ -305,9 +314,12 @@ Usage: paninfraspec-gen --inventory PATH --plan PATH --target BACKEND --out DIR
 - `--from-terraform-state PATH` — Terraform state JSON; `aws_instance`
   resources become nodes. Use instead of `--inventory`, not in addition to it.
 - `--plan PATH` — Dhall file returning `List Plan.Mapping`.
-- `--target BACKEND` — currently only `serverspec`. Goss, InSpec, and
-  Testinfra emitters are planned; each will ship with its own Dhall prelude
-  and become a new value here.
+- `--target BACKEND` — selects which emitter renders the spec files.
+  Backends are pluggable: today only `serverspec` is wired up, but the
+  architecture supports adding more without core changes (see
+  [Architecture](#architecture-how-backends-plug-in)). InSpec is the
+  next backend planned; it will appear here as a new value once its
+  emitter and Dhall prelude ship.
 - `--out DIR` — output directory (created if missing).
 - `--layout PATH` — optional Dhall layout file (returns `Layout.Layout`).
   When omitted, files are written flat as `<hostname>_spec.rb` (and
@@ -411,10 +423,10 @@ declared `customAttribute` — an undefined reference fails at spec runtime
 with `NameError`. Use `expand_attr` (rather than hand-writing the prefix) to
 keep typos visible in code review.
 
-## How it works
+## Architecture: how backends plug in
 
 ```
-Dhall preludes  ──►  Generic Semantic AST  ──►  per-backend emitter  ──►  out/<host>_spec.rb
+Dhall preludes  ──►  Generic Semantic IR  ──►  per-backend emitter  ──►  out/<host>_spec.rb
 ```
 
 The Dhall preludes use smart constructors so unsound combinations (e.g.
@@ -424,10 +436,14 @@ generator collects all assertions sharing a `(kind, primaryKey)` into one
 `exit-status = 0` and `exit-status = 1` for the same command), generation
 fails fast rather than emit Ruby that is guaranteed to fail at run time.
 
-The arrow above is drawn for Serverspec, but the AST and the emitter
-interface are backend-agnostic — Goss (YAML), InSpec, and Testinfra emitters
-are planned, and adding one is a new Dhall prelude plus a new emitter, with
-no changes to existing inputs.
+The arrow above is drawn for Serverspec, but the IR and the emitter
+interface are backend-agnostic. Adding a new backend is a new Dhall
+prelude plus a new emitter module — no changes to existing inputs, the
+IR, or other emitters. The dispatcher in
+[`src/PanInfraSpec/Emit.hs`](./src/PanInfraSpec/Emit.hs) routes on
+`--target`, and
+[`src/PanInfraSpec/Emit/Serverspec.hs`](./src/PanInfraSpec/Emit/Serverspec.hs)
+is the reference implementation. InSpec is the next backend planned.
 
 ## See also
 

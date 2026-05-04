@@ -1,14 +1,14 @@
 -- dhall/Scaffold.dhall
 -- Execution-scaffold prelude. A Scaffold bundles the auxiliary files that
 -- accompany the per-host spec files so a runner (Serverspec, ansible_spec,
--- Goss, ...) can pick them up.
+-- ...) can pick them up.
 --
--- Backend-agnostic by design: future Goss / InSpec / Testinfra scaffolds
--- have no Rakefile concept, so this prelude does not hardcode "Rakefile" or
--- "spec_helper.rb" as fields. Instead a scaffold lists arbitrary
--- `staticFiles` (independent of inventory) and `derivedFiles` (computed
--- from the inventory). Backend-specific vocabulary lives in the shipped
--- prelude instances under `Scaffold/`.
+-- Backend-agnostic by design: a future InSpec scaffold has no Rakefile
+-- concept, so this prelude does not hardcode "Rakefile" or "spec_helper.rb"
+-- as fields. Instead a scaffold lists arbitrary `staticFiles` (independent
+-- of inventory) and `derivedFiles` (computed from the inventory).
+-- Backend-specific vocabulary lives in the shipped prelude instances under
+-- `Scaffold/`.
 --
 -- File contents are plain `Text`. Use Dhall's `./path as Text` import to
 -- pull a Rakefile / spec_helper.rb body from a sibling text file rather
