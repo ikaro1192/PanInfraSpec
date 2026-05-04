@@ -49,8 +49,8 @@ instance Dhall.FromDhall BuiltinDeriver where
 
 -- | Execution scaffold loaded from a Dhall file (or supplied as the built-in
 -- 'defaultServerspecScaffold'). The scaffold owns the auxiliary files that
--- wrap the per-host spec files so a runner (Serverspec, ansible_spec,
--- Goss, ...) can pick them up.
+-- wrap the per-host spec files so a runner (Serverspec, ansible_spec, ...)
+-- can pick them up.
 --
 -- 'sStaticFiles' are inventory-independent files (Rakefile / spec_helper.rb
 -- in the Serverspec case). 'sDerivedFiles' is a Dhall function applied to
@@ -63,8 +63,9 @@ instance Dhall.FromDhall BuiltinDeriver where
 -- 'resolveBuiltinDerivers'.
 --
 -- Backend-specific vocabulary (the fact that Serverspec wants a Rakefile,
--- that Goss wants a @goss.yaml@, ...) lives in the shipped Dhall scaffold
--- preludes under @dhall/Scaffold/@, not in this Haskell type.
+-- that a future InSpec scaffold would want its own profile layout, ...)
+-- lives in the shipped Dhall scaffold preludes under @dhall/Scaffold/@, not
+-- in this Haskell type.
 data Scaffold = Scaffold
   { sName            :: Text
   , sStaticFiles     :: [OutputFile]

@@ -3,9 +3,9 @@
 A *scaffold* owns the auxiliary files that wrap the per-host spec files —
 the Rakefile, the spec helper, and any inventory-derived inventory files
 (e.g. ansible_spec's `hosts` and `site.yml`). A scaffold is decoupled from
-the *target backend* (`--target serverspec`, future `--target goss`,
-etc.) and decoupled from the *output layout* (`--layout`), so the three
-axes compose freely.
+the *target backend* (`--target serverspec`, future `--target inspec`)
+and decoupled from the *output layout* (`--layout`), so the three axes
+compose freely.
 
 PanInfraSpec ships two scaffolds out of the box:
 
