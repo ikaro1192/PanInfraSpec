@@ -11,14 +11,14 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends pkg-config zlib1g-dev \
  && rm -rf /var/lib/apt/lists/*
 
-COPY cabal.project cabal.project.freeze paninfraspec.cabal ./
-
-RUN cabal update \
- && cabal build --only-dependencies exe:paninfraspec-gen
-
 COPY . .
 
-RUN cabal install exe:paninfraspec-gen \
+# A two-step "manifests first, sources later" layer split is tempting for
+# caching, but Cabal 3.10's `--only-dependencies` still preprocesses the
+# in-package library (executable depends on it), which fails before the
+# source tree is COPY'd. Just build everything in one RUN.
+RUN cabal update \
+ && cabal install exe:paninfraspec-gen \
       --installdir=/out \
       --install-method=copy \
       --overwrite-policy=always \
