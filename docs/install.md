@@ -25,15 +25,22 @@ Pre-built binaries are published on every tag at
 | macOS arm64 | `paninfraspec-<version>-darwin-arm64.tar.gz` |
 | Windows x86_64 | `paninfraspec-<version>-windows-x86_64.zip` |
 
-Tarball install (Linux / macOS):
+Tarball install (Linux / macOS) — fetches the latest release:
 
 ```sh
-VERSION=0.4.0          # pick the tag you want
 ARCH=linux-x86_64      # or linux-aarch64, darwin-arm64
-curl -L "https://github.com/ikaro1192/PanInfraSpec/releases/download/v${VERSION}/paninfraspec-${VERSION}-${ARCH}.tar.gz" \
+TAG=$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+  https://github.com/ikaro1192/PanInfraSpec/releases/latest | sed 's|.*/||')
+VERSION=${TAG#v}
+curl -L "https://github.com/ikaro1192/PanInfraSpec/releases/download/${TAG}/paninfraspec-${VERSION}-${ARCH}.tar.gz" \
   | tar -xz
 sudo mv "paninfraspec-${VERSION}-${ARCH}/bin/paninfraspec-gen" /usr/local/bin/
 ```
+
+The `TAG=…` line resolves the `releases/latest` redirect to the current
+tag (e.g. `v0.4.0.8`) so you don't have to bump a hard-coded version. To
+pin to a specific release instead, set `TAG=vX.Y.Z` directly and skip the
+`curl` lookup.
 
 The Linux tarballs are dynamically linked against glibc, so they work on
 Ubuntu / Debian / RHEL / Fedora and most other glibc-based distros. Alpine
