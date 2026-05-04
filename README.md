@@ -83,7 +83,7 @@ running `rake spec` afterwards is still the user's responsibility.
 ## Quickstart
 
 ```sh
-cabal run paninfraspec-gen -- \
+paninfraspec-gen \
   --inventory examples/inventory.dhall \
   --plan      examples/plan.dhall \
   --target    serverspec \
@@ -118,7 +118,7 @@ pass `--scaffold PATH` to load a different one.
 | `dhall/Scaffold/AnsibleSpec.dhall` | `L.ansibleSpec` | `Rakefile`, `spec_helper.rb`, `hosts`, `site.yml` |
 
 ```sh
-cabal run paninfraspec-gen -- \
+paninfraspec-gen \
   --inventory examples/inventory-ansible-spec.dhall \
   --plan      examples/plan-with-modules.dhall \
   --target    serverspec \
