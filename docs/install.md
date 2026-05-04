@@ -13,6 +13,49 @@ The formula lives in [ikaro1192/homebrew-tap](https://github.com/ikaro1192/homeb
 and builds `paninfraspec-gen` from source, so the first install takes a few
 minutes. Works on both Apple Silicon and Intel Macs.
 
+## Nix (Flakes)
+
+PanInfraSpec ships a [Nix Flake](https://nixos.wiki/wiki/Flakes) at the
+repository root. With flakes enabled (`experimental-features = nix-command
+flakes` in `nix.conf`):
+
+```sh
+# One-shot run — fetches, builds and discards
+nix run github:ikaro1192/PanInfraSpec -- \
+  --inventory examples/inventory.dhall \
+  --plan      examples/plan.dhall \
+  --target    serverspec \
+  --out       /tmp/out
+
+# Persistent install into the user profile
+nix profile install github:ikaro1192/PanInfraSpec
+
+# Pin to a specific release
+nix profile install github:ikaro1192/PanInfraSpec/v0.5.0.0
+```
+
+Supported systems: `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`,
+`aarch64-darwin`. The flake builds against the default GHC of the pinned
+nixpkgs revision (currently the GHC 9.6 series), tracking the same
+toolchain the Docker image uses.
+
+For a development shell with `cabal-install`, `ghc`, `haskell-language-server`
+and the `dhall` CLI on `PATH`:
+
+```sh
+nix develop github:ikaro1192/PanInfraSpec
+# or, inside a clone:
+nix develop
+```
+
+The flake exposes:
+
+| Output | What it is |
+|---|---|
+| `packages.<system>.default` | the `paninfraspec-gen` executable derivation |
+| `apps.<system>.default` | runnable via `nix run` |
+| `devShells.<system>.default` | development shell (cabal + ghc + dhall) |
+
 ## From a release asset
 
 Pre-built binaries are published on every tag at

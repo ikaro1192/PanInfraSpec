@@ -24,3 +24,7 @@ stack.yaml.lock
 
 out/
 .claude
+
+# nix build / nix-build symlinks
+result
+result-*
