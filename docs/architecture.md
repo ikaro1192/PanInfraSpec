@@ -14,8 +14,14 @@ fails fast rather than emit Ruby that is guaranteed to fail at run time.
 The arrow above is drawn for Serverspec, but the IR and the emitter
 interface are backend-agnostic. Adding a new backend is a new Dhall
 prelude plus a new emitter module — no changes to existing inputs, the
-IR, or other emitters. The dispatcher in
-[`src/PanInfraSpec/Emit.hs`](../src/PanInfraSpec/Emit.hs) routes on
-`--target`, and
+IR, or other emitters. The registry in
+[`src/PanInfraSpec/Emit.hs`](../src/PanInfraSpec/Emit.hs) maps
+`--target` to a `BackendEntry` (emitter + allowed-kinds list); wiring up
+a new backend is one new import and one new entry in that map.
 [`src/PanInfraSpec/Emit/Serverspec.hs`](../src/PanInfraSpec/Emit/Serverspec.hs)
-is the reference implementation. InSpec is the next backend planned.
+is the reference implementation, exporting `serverspecBackend ::
+BackendEntry`. The same registry is the canonical source for
+`knownBackends` and `backendAllowedKinds`, so layer-2 validation in
+[`src/PanInfraSpec/Dhall.hs`](../src/PanInfraSpec/Dhall.hs) and
+the dispatch in `emitFor` cannot drift apart. InSpec is the next
+backend planned.

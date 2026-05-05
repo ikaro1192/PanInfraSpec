@@ -1,5 +1,6 @@
 module PanInfraSpec.Emit.Serverspec
   ( emit
+  , serverspecBackend
     -- * Schema (exported for property testing)
   , AttrTag (..)
   , serverspecSchema
@@ -23,6 +24,7 @@ import Prettyprinter (Doc, hsep, indent, pretty, punctuate, vsep, (<+>))
 import qualified Prettyprinter as PP
 import Prettyprinter.Render.Text (renderStrict)
 
+import PanInfraSpec.Emit.Backend (BackendEntry (..))
 import PanInfraSpec.Scaffold (Scaffold (..), OutputFile (..), resolveBuiltinDerivers)
 import PanInfraSpec.IR
 import PanInfraSpec.Layout (Layout (..), Sharing (..), applySpecPath, validateLayoutPath)
@@ -1035,3 +1037,27 @@ emit scaffold layout ep
         Just _  -> Left ("scaffold file " <> p
                          <> " collides with a generated spec file or another scaffold file")
         Nothing -> Right (Map.insert validated c acc)
+
+-- | Registry entry for the Serverspec backend. The allowed-kinds list is the
+-- layer-2 allowlist consulted by 'PanInfraSpec.Dhall.validate'; it is the
+-- canonical set of @aKind@ values this emitter understands and must stay in
+-- lockstep with the keys of 'serverspecSchema'.
+serverspecBackend :: BackendEntry
+serverspecBackend = BackendEntry
+  { beEmitter      = emit
+  , beAllowedKinds =
+      [ "service", "package", "port", "file", "command"
+      , "user", "group", "process", "mount", "interface", "kernel-module"
+      , "bond", "bridge", "default_gateway", "host"
+      , "ip6tables", "ipfilter", "ipnat", "iptables", "routing_table"
+      , "selinux", "selinux_module", "linux_audit_system"
+      , "linux_kernel_parameter", "cgroup"
+      , "windows_feature", "windows_registry_key"
+      , "x509_certificate", "cron"
+      , "lxc", "mail_alias", "ppa", "yumrepo"
+      , "iis_app_pool", "iis_website"
+      , "mysql_config", "php_config"
+      , "x509_private_key", "zfs"
+      , "docker_container", "docker_image"
+      ]
+  }
