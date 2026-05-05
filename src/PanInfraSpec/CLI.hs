@@ -28,7 +28,8 @@ import qualified Paths_paninfraspec as Paths
 import PanInfraSpec.Dhall (loadInventory, loadPlan, validate)
 import PanInfraSpec.DumpPlan (dumpPlan)
 import PanInfraSpec.Emit (emitFor)
-import PanInfraSpec.Scaffold (Scaffold, defaultServerspecScaffold, loadScaffold)
+import PanInfraSpec.Scaffold (Scaffold, loadScaffold)
+import PanInfraSpec.Scaffold.Defaults.Serverspec (defaultServerspecScaffold)
 import PanInfraSpec.IR
 import PanInfraSpec.Layout (Layout, defaultLayout, loadLayout)
 import PanInfraSpec.Resolve (matches, resolve)

@@ -7,10 +7,10 @@ import Test.Tasty.HUnit
 import PanInfraSpec.Scaffold
   ( Scaffold (..)
   , OutputFile (..)
-  , defaultServerspecScaffold
   , loadScaffold
   , resolveBuiltinDerivers
   )
+import PanInfraSpec.Scaffold.Defaults.Serverspec (defaultServerspecScaffold)
 import PanInfraSpec.IR (Node (..), Role (..))
 
 tests :: TestTree

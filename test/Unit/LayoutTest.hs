@@ -8,7 +8,8 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import PanInfraSpec.Emit (emitFor)
-import PanInfraSpec.Scaffold (OutputFile (..), defaultServerspecScaffold, sStaticFiles)
+import PanInfraSpec.Scaffold (OutputFile (..), sStaticFiles)
+import PanInfraSpec.Scaffold.Defaults.Serverspec (defaultServerspecScaffold)
 import PanInfraSpec.IR
 import PanInfraSpec.Layout
 

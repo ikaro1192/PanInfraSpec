@@ -59,6 +59,7 @@ library
     , PanInfraSpec.Emit.Serverspec
     , PanInfraSpec.DumpPlan
     , PanInfraSpec.Scaffold
+    , PanInfraSpec.Scaffold.Defaults.Serverspec
     , PanInfraSpec.SoT
     , PanInfraSpec.SoT.Terraform
     , PanInfraSpec.CLI
