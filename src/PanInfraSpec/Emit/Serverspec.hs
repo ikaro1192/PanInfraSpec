@@ -3,6 +3,7 @@ module PanInfraSpec.Emit.Serverspec
     -- * Schema (exported for property testing)
   , AttrTag (..)
   , serverspecSchema
+  , serverspecAllowedKinds
   ) where
 
 import Control.Monad (foldM, forM_, unless, when)
@@ -197,6 +198,12 @@ serverspecSchema = Map.fromList
   , ("docker_image", Map.fromList
       [ ("exist", ATBool) ])
   ]
+
+-- | Allowed @aKind@ values for the Serverspec backend, derived from the
+-- 'serverspecSchema' keys. This is the Serverspec emitter's contribution to
+-- the cross-backend kind registry consumed by 'PanInfraSpec.Dhall.validate'.
+serverspecAllowedKinds :: [Text]
+serverspecAllowedKinds = Map.keys serverspecSchema
 
 -- | Kinds whose @describe@ block takes no primary-key argument
 -- (e.g. @describe selinux do ... end@). The Dhall smart constructor for these
