@@ -26,6 +26,7 @@ import qualified Unit.IR.SplitTest
 import qualified Unit.ScaffoldTest
 import qualified Unit.LayoutTest
 import qualified Unit.ModuleSplitTest
+import qualified Unit.RegistryTest
 import qualified Unit.ValidateTest
 
 main :: IO ()
@@ -35,6 +36,7 @@ main = defaultMain $ testGroup "paninfraspec"
   , Unit.EmitCustomAttributesTest.tests
   , Unit.ScaffoldTest.tests
   , Unit.ModuleSplitTest.tests
+  , Unit.RegistryTest.tests
   , Unit.IR.SplitTest.tests
   , Roundtrip.DhallEncodingTest.tests
   , Property.EmitTest.tests

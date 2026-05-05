@@ -1,5 +1,6 @@
 module PanInfraSpec.Emit.Serverspec
   ( emit
+  , serverspecBackend
     -- * Schema (exported for property testing)
   , AttrTag (..)
   , serverspecSchema
@@ -24,6 +25,7 @@ import Prettyprinter (Doc, hsep, indent, pretty, punctuate, vsep, (<+>))
 import qualified Prettyprinter as PP
 import Prettyprinter.Render.Text (renderStrict)
 
+import PanInfraSpec.Emit.Backend (BackendEntry (..))
 import PanInfraSpec.Scaffold (Scaffold (..), OutputFile (..), resolveBuiltinDerivers)
 import PanInfraSpec.IR
 import PanInfraSpec.Layout (Layout (..), Sharing (..), applySpecPath, validateLayoutPath)
@@ -1042,3 +1044,13 @@ emit scaffold layout ep
         Just _  -> Left ("scaffold file " <> p
                          <> " collides with a generated spec file or another scaffold file")
         Nothing -> Right (Map.insert validated c acc)
+
+-- | Registry entry for the Serverspec backend. 'beAllowedKinds' is derived
+-- from 'serverspecSchema' so the layer-2 allowlist consulted by
+-- 'PanInfraSpec.Dhall.validate' cannot drift out of lockstep with the schema
+-- this emitter actually understands.
+serverspecBackend :: BackendEntry
+serverspecBackend = BackendEntry
+  { beEmitter      = emit
+  , beAllowedKinds = serverspecAllowedKinds
+  }
