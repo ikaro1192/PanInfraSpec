@@ -98,6 +98,7 @@ The three input axes — **inventory**, **plan**, and (optionally) **layout** /
 - [CLI reference](./docs/cli.md) — every flag and exit code
 - [Resource catalogue](./docs/resources.md) — the 26 Serverspec resources Dhall exposes
 - [Architecture](./docs/architecture.md) — the IR and emitter pipeline, where backends plug in
+- [Developer guide](./docs/developer-guide.md) — internal map of the codebase: pipeline, modules, extension points, invariants
 
 See also:
 
