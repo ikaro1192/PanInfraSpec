@@ -1,0 +1,12 @@
+-- CI-only project file for HPC coverage runs.
+--
+-- Using `cabal test all --enable-coverage` globally disables per-component
+-- builds, which breaks dependencies that use internal libraries (e.g.
+-- vector-0.13.2.0). Scoping coverage to the local package via
+-- `package paninfraspec` keeps deps on per-component builds while still
+-- instrumenting our library and test suite.
+
+import: cabal.project
+
+package paninfraspec
+  coverage: True

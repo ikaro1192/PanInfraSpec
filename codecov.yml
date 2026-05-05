@@ -1,0 +1,20 @@
+coverage:
+  status:
+    project:
+      default:
+        # Allow small regressions without failing the check.
+        threshold: 1%
+    patch:
+      default:
+        target: 70%
+        threshold: 5%
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: false
+
+ignore:
+  - "test/**/*"
+  - "app/Main.hs"
+  - "**/Paths_paninfraspec.hs"
