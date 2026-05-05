@@ -1,5 +1,6 @@
 # PanInfraSpec
 [![CI](https://github.com/ikaro1192/PanInfraSpec/actions/workflows/ci.yml/badge.svg)](https://github.com/ikaro1192/PanInfraSpec/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/ikaro1192/PanInfraSpec/branch/main/graph/badge.svg)](https://codecov.io/gh/ikaro1192/PanInfraSpec)
 [![Release](https://img.shields.io/github/v/release/ikaro1192/PanInfraSpec)](https://github.com/ikaro1192/PanInfraSpec/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Haskell](https://img.shields.io/badge/language-Haskell-5D4F85)](https://www.haskell.org/)
