@@ -60,8 +60,9 @@ data Options = Options
   , optOnlyRole       :: Maybe Text
   , optOnlyHost       :: Maybe Text
   , optOnlyTag        :: Maybe Text
-  , optDumpPlan       :: Bool
-  , optSourceComments :: Bool
+  , optDumpPlan          :: Bool
+  , optSourceComments    :: Bool
+  , optSourceLocInDescribe :: Bool
   }
 
 inventorySourceP :: Parser InventorySource
@@ -131,6 +132,12 @@ parser = Options
   <*> flag True False
         ( long "no-source-comments"
        <> help "Suppress # src: provenance comments above generated describe blocks (byte-stable output)"
+        )
+  <*> switch
+        ( long "source-loc-in-describe"
+       <> help "Append the Dhall source location (file:line:col) to each describe \
+               \block's secondary description so rake spec output references the \
+               \originating plan line. Off by default; changes RSpec runtime output."
         )
 
 versionOption :: Parser (a -> a)
@@ -226,7 +233,9 @@ run opts@Options{..} = do
                              Left e -> die ("scaffold load failed: " <> e)
                              Right scaffold ->
                                let emitOpts = defaultEmitOptions
-                                                { sourceComments = optSourceComments }
+                                                { sourceComments      = optSourceComments
+                                                , sourceLocInDescribe = optSourceLocInDescribe
+                                                }
                                in case emitFor scaffold layout ep emitOpts of
                                  Left e     -> die ("emit failed: " <> e)
                                  Right outs -> writeAll optOut outs

@@ -6,6 +6,7 @@ Usage: paninfraspec-gen (--inventory PATH | --from-terraform-state PATH)
                         [--layout PATH] [--scaffold PATH]
                         [--only-role ROLE] [--only-host HOST] [--only-tag TAG]
                         [--dump-plan] [--no-source-comments]
+                        [--source-loc-in-describe]
 ```
 
 ## Flags
@@ -38,6 +39,13 @@ Usage: paninfraspec-gen (--inventory PATH | --from-terraform-state PATH)
   `describe` block. Use this for byte-stable output (e.g. when the spec
   files are diffed in CI). Comments are on by default. See
   [`plan.md`](./plan.md#provenance-comments).
+- `--source-loc-in-describe` — append the Dhall source location to each
+  `describe` block's secondary description string, so RSpec runtime output
+  (e.g. `rake spec`) prints the originating plan line next to the resource
+  name. Off by default because it changes RSpec output strings that
+  downstream CI tooling may parse. Whereas `# src:` comments only show up
+  when someone opens the generated file, this flag surfaces the location in
+  test failure logs. See [`plan.md`](./plan.md#provenance-comments).
 
 ## Exit codes
 

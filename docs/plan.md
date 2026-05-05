@@ -67,6 +67,33 @@ plans authored with `Plan.make`, `Plan.onAll`, `Plan.forRole`,
 comments transparently — there is no need to rewrite plans as raw
 record literals to get provenance trace.
 
+### Surfacing locations in `rake spec` output
+
+`# src:` comments only show up when someone opens the generated file. To
+push the same information into RSpec's *runtime* output — the failure
+summary CI logs, the lines `rake spec` prints to the terminal — pass
+`--source-loc-in-describe`. The emitter then appends the location to each
+`describe` block's secondary description string:
+
+```ruby
+describe package('nginx'), '(examples/plan.dhall:24:17)' do
+  it { should be_installed }
+end
+```
+
+`rake spec` prints:
+
+```
+Package "nginx" (examples/plan.dhall:24:17)
+  is expected to be installed
+```
+
+When several assertions merge into one `describe` block, every
+contributing location is comma-joined inside the secondary string
+(`'(plan.dhall:42:7, plan.dhall:55:9)'`). The flag is off by default
+because it changes the human-readable test output that downstream CI
+tooling may parse; opt in once your environment is ready.
+
 ## Splitting a host's spec into multiple files
 
 Tag a list of assertions with `Spec.module_ "<name>"` to label them with a

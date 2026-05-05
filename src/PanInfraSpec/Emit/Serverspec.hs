@@ -26,7 +26,11 @@ import qualified Prettyprinter as PP
 import Prettyprinter.Render.Text (renderStrict)
 
 import PanInfraSpec.Emit.Backend (BackendEntry (..))
-import PanInfraSpec.Emit.SourceMap (EmitOptions (..), formatSrcComment)
+import PanInfraSpec.Emit.SourceMap
+  ( EmitOptions (..)
+  , formatDescribeSrcLoc
+  , formatSrcComment
+  )
 import PanInfraSpec.Scaffold (Scaffold (..), OutputFile (..), resolveBuiltinDerivers)
 import PanInfraSpec.IR
 import PanInfraSpec.Layout (Layout (..), Sharing (..), applySpecPath, validateLayoutPath)
@@ -922,8 +926,10 @@ lookupText k m = case Map.lookup k m of
 -- @phpConfigWithIni@).
 --
 -- 'EmitOptions' controls whether @# src:@ provenance comments are prepended
--- above the @describe@ header (one line per 'aSourceLocs' entry). The header
--- itself is unchanged, so disabling comments keeps byte-stable output.
+-- above the @describe@ header (one line per 'aSourceLocs' entry) and whether
+-- the Dhall source location is woven into the @describe@ block's secondary
+-- description string (so RSpec runtime output references the originating plan
+-- line). Disabling both keeps byte-stable output.
 formatGroup :: EmitOptions -> Assertion -> Either Text (Doc ann)
 formatGroup opts (Assertion k pk attrs0 _ locs) = do
   let resource = pretty (kindToRubyResource k)
@@ -933,16 +939,25 @@ formatGroup opts (Assertion k pk attrs0 _ locs) = do
         = (Just p, Map.delete "_ini" attrs0)
         | otherwise
         = (Nothing, attrs0)
-  header <-
+  subject <-
     if Set.member k singletonKinds
-      then Right ("describe" <+> resource <+> "do")
+      then Right resource
       else do
         hd <- primaryDoc k pk
         let args = case iniArg of
               Nothing -> hd
               Just p  -> hd <> "," <+> ":ini" <+> "=>" <+> rubyString p
-        Right ("describe" <+> resource <> "(" <> args <> ")" <+> "do")
-  let body         = vsep (renderAttrs k attrs)
+        Right (resource <> "(" <> args <> ")")
+  let locSecondary
+        | sourceLocInDescribe opts
+        , Just s <- formatDescribeSrcLoc locs
+            = Just (rubyString s)
+        | otherwise
+            = Nothing
+      header = case locSecondary of
+        Nothing -> "describe" <+> subject <+> "do"
+        Just s  -> "describe" <+> subject <> "," <+> s <+> "do"
+      body         = vsep (renderAttrs k attrs)
       commentLines = if sourceComments opts
                        then map pretty (formatSrcComment locs)
                        else []
