@@ -9,7 +9,7 @@ import Test.Tasty.QuickCheck (testProperty, counterexample, forAll, Property)
 
 import PanInfraSpec.Emit (emitFor)
 import PanInfraSpec.Emit.Serverspec (AttrTag (..), serverspecSchema)
-import PanInfraSpec.Scaffold (defaultServerspecScaffold)
+import PanInfraSpec.Scaffold.Defaults.Serverspec (defaultServerspecScaffold)
 import PanInfraSpec.IR
 import PanInfraSpec.Layout (defaultLayout)
 

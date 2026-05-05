@@ -9,7 +9,7 @@ import Test.Tasty.HUnit
 
 import PanInfraSpec.Dhall (validate)
 import PanInfraSpec.Emit (emitFor)
-import PanInfraSpec.Scaffold (defaultServerspecScaffold)
+import PanInfraSpec.Scaffold.Defaults.Serverspec (defaultServerspecScaffold)
 import PanInfraSpec.IR
 import PanInfraSpec.Layout (defaultLayout)
 import PanInfraSpec.Resolve (resolve)

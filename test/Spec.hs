@@ -10,9 +10,9 @@ import PanInfraSpec.Dhall (loadInventory, loadPlan, validate)
 import PanInfraSpec.Emit (emitFor)
 import PanInfraSpec.Scaffold
   ( Scaffold
-  , defaultServerspecScaffold
   , loadScaffold
   )
+import PanInfraSpec.Scaffold.Defaults.Serverspec (defaultServerspecScaffold)
 import PanInfraSpec.IR (PlanFile (..))
 import PanInfraSpec.Layout (Layout, defaultLayout, loadLayout)
 import PanInfraSpec.Resolve (resolve)

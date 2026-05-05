@@ -7,7 +7,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import PanInfraSpec.Emit (emitFor)
-import PanInfraSpec.Scaffold (defaultServerspecScaffold)
+import PanInfraSpec.Scaffold.Defaults.Serverspec (defaultServerspecScaffold)
 import PanInfraSpec.IR hiding (Assertion)
 import qualified PanInfraSpec.IR as IR
 import PanInfraSpec.Layout (Layout (..), Sharing (..), loadLayout)
