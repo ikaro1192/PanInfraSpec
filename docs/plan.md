@@ -40,6 +40,33 @@ The four selector helpers are:
 Mappings stack: a `Web`-role node tagged `metrics` in the example above
 receives the baseline check, the full nginx stack, *and* the Prometheus port.
 
+## Provenance comments
+
+When `paninfraspec-gen` is invoked without `--no-source-comments` (the
+default), the emitter prepends a `# src:` line above every generated
+`describe` block that points back to the originating Dhall expression:
+
+```ruby
+# src: examples/plan.dhall:24:17 — Spec.package "nginx" Spec.PackageState.Installed
+describe package('nginx') do
+  it { should be_installed }
+end
+```
+
+When several assertions merge into one `describe` block (e.g. `OwnedBy` and
+`Mode` for the same file), one `# src:` line per origin is emitted so each
+contributing Dhall location is preserved. Failing Serverspec tests can then
+be traced back to the responsible Dhall expression by file, line, and
+column.
+
+The walker that captures these locations runs a small partial normaliser
+of its own (β-reduction, `let` inlining, field projection, list `//`
+record-merge, and `List/fold`) that preserves every `Note` wrapper, so
+plans authored with `Plan.make`, `Plan.onAll`, `Plan.forRole`,
+`Plan.forTag`, `Plan.forHost`, and `Spec.module_` produce `# src:`
+comments transparently — there is no need to rewrite plans as raw
+record literals to get provenance trace.
+
 ## Splitting a host's spec into multiple files
 
 Tag a list of assertions with `Spec.module_ "<name>"` to label them with a

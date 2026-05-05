@@ -5,7 +5,7 @@ Usage: paninfraspec-gen (--inventory PATH | --from-terraform-state PATH)
                         --plan PATH --target BACKEND --out DIR
                         [--layout PATH] [--scaffold PATH]
                         [--only-role ROLE] [--only-host HOST] [--only-tag TAG]
-                        [--dump-plan]
+                        [--dump-plan] [--no-source-comments]
 ```
 
 ## Flags
@@ -33,6 +33,11 @@ Usage: paninfraspec-gen (--inventory PATH | --from-terraform-state PATH)
   inventory before resolution. Multiple flags are AND-composed.
 - `--dump-plan` — print the resolved plan as a tree and exit; no files are
   written. Useful for confirming which mappings hit which nodes.
+- `--no-source-comments` — suppress the `# src: <plan>:<line>:<col> — <expr>`
+  provenance comments that the emitter prepends above each generated
+  `describe` block. Use this for byte-stable output (e.g. when the spec
+  files are diffed in CI). Comments are on by default. See
+  [`plan.md`](./plan.md#provenance-comments).
 
 ## Exit codes
 

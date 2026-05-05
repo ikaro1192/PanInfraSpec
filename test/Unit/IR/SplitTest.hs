@@ -45,12 +45,13 @@ assertionIdentity = do
             , IRA.aPrimaryKey = "nginx"
             , IRA.aAttrs      = Map.empty
             , IRA.aModule     = Nothing
+            , IRA.aSourceLocs = []
             } :: IR.Assertion
   IR.aKind a @?= "package"
 
 mappingWiring :: Assertion
 mappingWiring = do
-  let a  = IRA.Assertion "package" "nginx" Map.empty Nothing
+  let a  = IRA.mkAssertion "package" "nginx" Map.empty Nothing
       m  = IRA.Mapping IRS.SelAll [a] :: IR.Mapping
       pf = IRA.PlanFile "serverspec" [m] :: IR.PlanFile
       n  = IRI.Node "h" Nothing (IRI.Role "Web") [] []

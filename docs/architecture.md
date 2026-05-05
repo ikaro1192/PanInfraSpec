@@ -33,3 +33,26 @@ BackendEntry`. The same registry is the canonical source for
 [`src/PanInfraSpec/Dhall.hs`](../src/PanInfraSpec/Dhall.hs) and
 the dispatch in `emitFor` cannot drift apart. InSpec is the next
 backend planned.
+
+## Source-location threading
+
+The plan loader runs a small AST walker
+([`src/PanInfraSpec/Dhall/SourceMap.hs`](../src/PanInfraSpec/Dhall/SourceMap.hs))
+over the resolved Dhall expression, capturing the `Note Src` wrapping
+each assertion. The captured locations are spliced back into the decoded
+`Assertion` values via `aSourceLocs`, which the Serverspec emitter then
+renders as `# src:` comments above the corresponding `describe` block.
+
+`Dhall.Core.normalize` strips `Note` wrappers, so the walker cannot use
+it directly. Instead it runs a small partial normaliser
+(`betaReduceKeepNotes`) that performs β-reduction, `let` inlining,
+record-field projection, record `//` merge, and `List/fold` step-by-step
+while threading every `Note s e` through unchanged. That covers the
+smart-constructor library shipped in `dhall/Plan.dhall` and
+`dhall/Serverspec.dhall` (`Plan.make`, `Plan.onAll`, `Plan.forRole`,
+`Plan.forTag`, `Plan.forHost`, `Spec.module_`), so plan files authored
+in the natural smart-constructor style still expose per-assertion
+locations. The value side still goes through the standard
+`Dhall.normalize` + `Dhall.extract` pipeline. See
+[`docs/plan.md`](./plan.md#provenance-comments) for the user-visible
+behaviour.

@@ -8,6 +8,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import PanInfraSpec.Emit (emitFor)
+import PanInfraSpec.Emit.SourceMap (defaultEmitOptions)
 import PanInfraSpec.Scaffold (OutputFile (..), sStaticFiles)
 import PanInfraSpec.Scaffold.Defaults.Serverspec (defaultServerspecScaffold)
 import PanInfraSpec.IR
@@ -52,7 +53,7 @@ tests = testGroup "Layout"
                     , Job (mkNode "web02" "Web") [pingAssertion]
                     ]
       in assertLeftContains "collision"
-           (emitFor defaultServerspecScaffold layout ep)
+           (emitFor defaultServerspecScaffold layout ep defaultEmitOptions)
   , testCase "emit: rejects scaffold static file colliding with a spec output" $
       let scaffold = defaultServerspecScaffold
             { sStaticFiles =
@@ -61,7 +62,7 @@ tests = testGroup "Layout"
           ep = ExecutionPlan "serverspec"
                  [ Job (mkNode "web01" "Web") [pingAssertion] ]
       in assertLeftContains "collides"
-           (emitFor scaffold defaultLayout ep)
+           (emitFor scaffold defaultLayout ep defaultEmitOptions)
   , testCase "loadLayout: byGroupProduct fixture works" byGroupProductLoad
   -- PerRole sharing: role-shared spec file across multiple hosts ----------
   , testCase "PerRole: identical content across hosts merges into one file"
@@ -87,14 +88,14 @@ perRoleMergesIdenticalContent =
         }
       moduleLabel = Just "nginx"
       asserts =
-        [ Assertion "command" "uname -a"
+        [ mkAssertion "command" "uname -a"
             (Map.fromList [("exit-status", AVNat 0)]) moduleLabel
         ]
       ep = ExecutionPlan "serverspec"
              [ Job (mkNode "web01" "Web") asserts
              , Job (mkNode "web02" "Web") asserts
              ]
-  in case emitFor defaultServerspecScaffold layout ep of
+  in case emitFor defaultServerspecScaffold layout ep defaultEmitOptions of
        Left e     -> assertFailure ("expected merge, got error: " <> T.unpack e)
        Right outs -> do
          assertBool "Web/nginx_spec.rb missing" $
@@ -113,16 +114,16 @@ perRoleRejectsDifferingContent =
         , lSharing  = PerRole
         }
       moduleLabel = Just "nginx"
-      base = Assertion "command" "uname -a"
+      base = mkAssertion "command" "uname -a"
                (Map.fromList [("exit-status", AVNat 0)]) moduleLabel
-      extra = Assertion "command" "hostname"
+      extra = mkAssertion "command" "hostname"
                 (Map.fromList [("exit-status", AVNat 0)]) moduleLabel
       ep = ExecutionPlan "serverspec"
              [ Job (mkNode "web01" "Web") [base]
              , Job (mkNode "web02" "Web") [base, extra]
              ]
   in assertLeftContains "differing spec contents"
-       (emitFor defaultServerspecScaffold layout ep)
+       (emitFor defaultServerspecScaffold layout ep defaultEmitOptions)
 
 -- | PerRole layout + every host in the role declaring the same
 -- customAttributes → emit collapses the role-shared spec into one file
@@ -139,7 +140,7 @@ perRoleAcceptsConsistentCustomAttributes =
         }
       moduleLabel = Just "nginx"
       asserts =
-        [ Assertion "command" "uname -a"
+        [ mkAssertion "command" "uname -a"
             (Map.fromList [("exit-status", AVNat 0)]) moduleLabel
         ]
       cas      = [CustomAttribute "ram" "free -k"]
@@ -148,7 +149,7 @@ perRoleAcceptsConsistentCustomAttributes =
                    [ Job (mkHost "web01") asserts
                    , Job (mkHost "web02") asserts
                    ]
-  in case emitFor defaultServerspecScaffold layout ep of
+  in case emitFor defaultServerspecScaffold layout ep defaultEmitOptions of
        Left e     -> assertFailure ("expected merge, got error: " <> T.unpack e)
        Right outs -> case Map.lookup "Web/nginx_spec.rb" outs of
          Nothing      -> assertFailure "Web/nginx_spec.rb missing"
@@ -173,7 +174,7 @@ perRoleRejectsDivergingCustomAttributes =
         }
       moduleLabel = Just "nginx"
       asserts =
-        [ Assertion "command" "uname -a"
+        [ mkAssertion "command" "uname -a"
             (Map.fromList [("exit-status", AVNat 0)]) moduleLabel
         ]
       hostA = (mkNode "web01" "Web")
@@ -183,7 +184,7 @@ perRoleRejectsDivergingCustomAttributes =
       ep = ExecutionPlan "serverspec"
              [ Job hostA asserts, Job hostB asserts ]
   in assertLeftContains "customAttributes"
-       (emitFor defaultServerspecScaffold layout ep)
+       (emitFor defaultServerspecScaffold layout ep defaultEmitOptions)
 
 byGroupProductLoad :: IO ()
 byGroupProductLoad = do
@@ -217,7 +218,7 @@ mkNode h r = Node h Nothing (Role r) [] []
 -- check. Used so the focus stays on the layout / collision behaviour rather
 -- than on emit-internal validation.
 pingAssertion :: PanInfraSpec.IR.Assertion
-pingAssertion = Assertion "command" "uname -a"
+pingAssertion = mkAssertion "command" "uname -a"
   (Map.fromList [("exit-status", AVNat 0)]) Nothing
 
 nodeFnDhall :: Text

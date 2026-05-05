@@ -8,6 +8,7 @@ import Test.Tasty.Golden (goldenVsString)
 
 import PanInfraSpec.Dhall (loadInventory, loadPlan, validate)
 import PanInfraSpec.Emit (emitFor)
+import PanInfraSpec.Emit.SourceMap (defaultEmitOptions)
 import PanInfraSpec.Scaffold
   ( Scaffold
   , loadScaffold
@@ -22,12 +23,14 @@ import qualified Roundtrip.DhallEncodingTest
 import qualified SoT.TerraformTest
 import qualified Synth.HundredHostsTest
 import qualified Unit.EmitCustomAttributesTest
+import qualified Unit.EmitSourceMapTest
 import qualified Unit.EmitTypedExprTest
 import qualified Unit.IR.SplitTest
 import qualified Unit.ScaffoldTest
 import qualified Unit.LayoutTest
 import qualified Unit.ModuleSplitTest
 import qualified Unit.RegistryTest
+import qualified Unit.SourceLocTest
 import qualified Unit.ValidateTest
 
 main :: IO ()
@@ -35,10 +38,12 @@ main = defaultMain $ testGroup "paninfraspec"
   [ Unit.ValidateTest.tests
   , Unit.LayoutTest.tests
   , Unit.EmitCustomAttributesTest.tests
+  , Unit.EmitSourceMapTest.tests
   , Unit.EmitTypedExprTest.tests
   , Unit.ScaffoldTest.tests
   , Unit.ModuleSplitTest.tests
   , Unit.RegistryTest.tests
+  , Unit.SourceLocTest.tests
   , Unit.IR.SplitTest.tests
   , Roundtrip.DhallEncodingTest.tests
   , Property.EmitTest.tests
@@ -100,7 +105,7 @@ generateWith invPath planPath getLayout name = do
   pf     <- loadPlan      planPath
   layout <- getLayout
   let plan = resolve "serverspec" nodes (pfMappings pf)
-  case validate plan >>= emitFor defaultServerspecScaffold layout of
+  case validate plan >>= \ep -> emitFor defaultServerspecScaffold layout ep defaultEmitOptions of
     Left e -> error ("emit failed: " <> show e)
     Right outs -> case Map.lookup name outs of
       Just t  -> pure (LBS.fromStrict (TE.encodeUtf8 t))
@@ -134,7 +139,7 @@ generateAnsibleSpec name = do
   layout   <- mustLoadLayout   "test/Golden/ansible_spec/layout.dhall"
   scaffold <- mustLoadScaffold "test/Golden/ansible_spec/scaffold.dhall"
   let plan = resolve "serverspec" nodes (pfMappings pf)
-  case validate plan >>= emitFor scaffold layout of
+  case validate plan >>= \ep -> emitFor scaffold layout ep defaultEmitOptions of
     Left e -> error ("emit failed: " <> show e)
     Right outs -> case Map.lookup name outs of
       Just t  -> pure (LBS.fromStrict (TE.encodeUtf8 t))

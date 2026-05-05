@@ -9,6 +9,7 @@ import Test.Tasty.HUnit
 
 import PanInfraSpec.Dhall (validate)
 import PanInfraSpec.Emit (emitFor)
+import PanInfraSpec.Emit.SourceMap (defaultEmitOptions)
 import PanInfraSpec.Scaffold.Defaults.Serverspec (defaultServerspecScaffold)
 import PanInfraSpec.IR
 import PanInfraSpec.Layout (defaultLayout)
@@ -38,17 +39,17 @@ synthInventory =
 synthPlan :: [Mapping]
 synthPlan =
   [ Mapping SelAll
-      [ Assertion "command" "uname -a"
+      [ mkAssertion "command" "uname -a"
           (Map.singleton "exit-status" (AVNat 0)) Nothing
       ]
   , Mapping (SelRole (Role "Web"))
-      [ Assertion "package" "nginx"
+      [ mkAssertion "package" "nginx"
           (Map.singleton "installed" (AVBool True)) Nothing
-      , Assertion "service" "nginx"
+      , mkAssertion "service" "nginx"
           (Map.singleton "running" (AVBool True)) Nothing
       ]
   , Mapping (SelTag "metrics")
-      [ Assertion "port" "9090"
+      [ mkAssertion "port" "9090"
           (Map.singleton "listening" (AVBool True)) Nothing
       ]
   ]
@@ -57,7 +58,7 @@ hundredHosts :: IO ()
 hundredHosts = do
   let ep = resolve "serverspec" synthInventory synthPlan
   length (epJobs ep) @?= 100
-  case validate ep >>= emitFor defaultServerspecScaffold defaultLayout of
+  case validate ep >>= \valid -> emitFor defaultServerspecScaffold defaultLayout valid defaultEmitOptions of
     Left e -> assertFailure ("emit failed: " <> T.unpack e)
     Right outs -> do
       -- 100 host files + spec_helper.rb + Rakefile

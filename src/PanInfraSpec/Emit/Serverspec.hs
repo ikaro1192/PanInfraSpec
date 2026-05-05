@@ -26,6 +26,7 @@ import qualified Prettyprinter as PP
 import Prettyprinter.Render.Text (renderStrict)
 
 import PanInfraSpec.Emit.Backend (BackendEntry (..))
+import PanInfraSpec.Emit.SourceMap (EmitOptions (..), formatSrcComment)
 import PanInfraSpec.Scaffold (Scaffold (..), OutputFile (..), resolveBuiltinDerivers)
 import PanInfraSpec.IR
 import PanInfraSpec.Layout (Layout (..), Sharing (..), applySpecPath, validateLayoutPath)
@@ -275,7 +276,7 @@ showVal = \case
 -- schema for that kind, every attr value's tag matches the expected tag, and
 -- per-kind primaryKey shape (port must be parseable as Natural).
 validateAssertion :: Assertion -> Either Text Assertion
-validateAssertion a@(Assertion k pk attrs _) = do
+validateAssertion a@(Assertion k pk attrs _ _) = do
   kindSchema <- case Map.lookup k serverspecSchema of
     Just s  -> Right s
     Nothing -> Left ("unknown kind for serverspec: " <> k)
@@ -332,7 +333,11 @@ mergeGroup (a :| rest) = foldM step a rest
     step acc nxt = do
       mergedAttrs  <- mergeAttrs  (aKind acc) (aPrimaryKey acc) (aAttrs  acc) (aAttrs  nxt)
       mergedModule <- mergeModule (aKind acc) (aPrimaryKey acc) (aModule acc) (aModule nxt)
-      pure acc { aAttrs = mergedAttrs, aModule = mergedModule }
+      pure acc
+        { aAttrs      = mergedAttrs
+        , aModule     = mergedModule
+        , aSourceLocs = aSourceLocs acc <> aSourceLocs nxt
+        }
 
 -- | Reject two assertions for the same @(kind, primaryKey)@ that disagree on
 -- their module label. The user has to either align the labels, drop them,
@@ -915,8 +920,12 @@ lookupText k m = case Map.lookup k m of
 -- The @php_config@ kind injects an @:ini => '<path>'@ keyword arg into the
 -- header when the @_ini@ sentinel attribute is present (see Dhall
 -- @phpConfigWithIni@).
-formatGroup :: Assertion -> Either Text (Doc ann)
-formatGroup (Assertion k pk attrs0 _) = do
+--
+-- 'EmitOptions' controls whether @# src:@ provenance comments are prepended
+-- above the @describe@ header (one line per 'aSourceLocs' entry). The header
+-- itself is unchanged, so disabling comments keeps byte-stable output.
+formatGroup :: EmitOptions -> Assertion -> Either Text (Doc ann)
+formatGroup opts (Assertion k pk attrs0 _ locs) = do
   let resource = pretty (kindToRubyResource k)
       (iniArg, attrs)
         | k == "php_config"
@@ -933,8 +942,11 @@ formatGroup (Assertion k pk attrs0 _) = do
               Nothing -> hd
               Just p  -> hd <> "," <+> ":ini" <+> "=>" <+> rubyString p
         Right ("describe" <+> resource <> "(" <> args <> ")" <+> "do")
-  let body = vsep (renderAttrs k attrs)
-  pure $ vsep [header, indent 2 body, "end"]
+  let body         = vsep (renderAttrs k attrs)
+      commentLines = if sourceComments opts
+                       then map pretty (formatSrcComment locs)
+                       else []
+  pure $ vsep (commentLines ++ [header, indent 2 body, "end"])
 
 -- | Validate the @customAttributes@ list of a 'Node' before emitting any
 -- @paninfraspec_<name> = ...@ preamble lines. Rejects:
@@ -996,8 +1008,8 @@ renderCustomAttributePreamble cas = vsep
 -- Doing the merge BEFORE the partition is what preserves the
 -- "exit-status=0 vs exit-status=1 for the same command" safety net even
 -- when the conflicting commands sit in different module wrappers.
-formatJob :: Layout -> Job -> Either Text [(FilePath, Text)]
-formatJob layout (Job node assertions) = do
+formatJob :: EmitOptions -> Layout -> Job -> Either Text [(FilePath, Text)]
+formatJob opts layout (Job node assertions) = do
   validatedCAs <- validateCustomAttributes (customAttributes node)
   validated    <- traverse validateAssertion assertions
   merged       <- traverse mergeGroup (groupAssertions validated)
@@ -1011,7 +1023,7 @@ formatJob layout (Job node assertions) = do
     addToBucket a = Map.insertWith (++) (aModule a) [a]
 
     renderBucket cas (maybeMod, asserts) = do
-      blocks   <- traverse formatGroup asserts
+      blocks   <- traverse (formatGroup opts) asserts
       filename <- validateLayoutPath
                     (T.unpack (applySpecPath layout node maybeMod))
       let docText d = renderStrict (PP.layoutPretty PP.defaultLayoutOptions d)
@@ -1034,12 +1046,17 @@ formatJob layout (Job node assertions) = do
 -- ansible_spec's @hosts@ is a candidate — should be invoked through
 -- inventory pathways once that channel exists. For Phase 1 the per-job
 -- node list is sufficient for both shipped scaffolds.
-emit :: Scaffold -> Layout -> ExecutionPlan -> Either Text (Map FilePath Text)
-emit scaffold layout ep
+emit
+  :: Scaffold
+  -> Layout
+  -> ExecutionPlan
+  -> EmitOptions
+  -> Either Text (Map FilePath Text)
+emit scaffold layout ep opts
   | epTargetBackend ep /= "serverspec" =
       Left ("backend mismatch: expected serverspec, got " <> epTargetBackend ep)
   | otherwise = do
-      perJob  <- traverse (formatJob layout) (epJobs ep)
+      perJob  <- traverse (formatJob opts layout) (epJobs ep)
       perHost <- foldM (insertSpec (lSharing layout)) Map.empty (concat perJob)
       let nodes  = jNode <$> epJobs ep
           extras = sStaticFiles scaffold

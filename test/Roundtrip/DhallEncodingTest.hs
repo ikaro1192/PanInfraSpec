@@ -162,12 +162,12 @@ tests = testGroup "Dhall round-trip"
   , testCase "Assertion record (no module label)"
       (decodes
         ("{ kind = \"package\", primaryKey = \"nginx\", attrs = toMap { installed = (" <> attrValueU <> ").AVBool True }, module = None Text }")
-        (Assertion "package" "nginx" (Map.fromList [("installed", AVBool True)]) Nothing)
+        (mkAssertion "package" "nginx" (Map.fromList [("installed", AVBool True)]) Nothing)
       )
   , testCase "Assertion record (with module label)"
       (decodes
         ("{ kind = \"service\", primaryKey = \"nginx\", attrs = toMap { running = (" <> attrValueU <> ").AVBool True }, module = Some \"nginx\" }")
-        (Assertion "service" "nginx" (Map.fromList [("running", AVBool True)]) (Just "nginx"))
+        (mkAssertion "service" "nginx" (Map.fromList [("running", AVBool True)]) (Just "nginx"))
       )
   , testCase "Spec.module_ tags every assertion in the list"
       specModuleHelper

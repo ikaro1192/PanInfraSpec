@@ -152,12 +152,33 @@ Serverspec / InSpec / Ansible vocabulary must not appear here.
   first-class constructor. Embedded inside `AttrLeaf` via `ALExpr`. Stays
   flat (non-recursive) for the same Dhall-no-recursive-types reason as
   `Selector`. Grow additively — see issue #57.
+- `IR/SourceLoc.hs` (`SourceLoc`) carries Dhall source-file coordinates
+  (file, line, col, raw text) for an IR node. `Assertion` keeps a list of
+  these in `aSourceLocs` so the Serverspec emitter can prepend
+  `# src: <file>:<line>:<col> — <expr>` comments above each `describe`
+  block. The list grows when `mergeGroup` collapses redundant assertions
+  for the same `(kind, primaryKey)` — every contributor's location is
+  preserved.
 
 ### 5.2 `PanInfraSpec.Dhall`
 
 Loaders for inventory and plan files plus layer-2 validate.
 `backendAllowedKinds` and `knownBackends` are *re-exports* of values
 derived from the `Emit` registry — no edits needed when adding a backend.
+
+`loadPlan` is split: a partial normaliser
+(`PanInfraSpec.Dhall.SourceMap.betaReduceKeepNotes`) runs on the
+resolved expression — it performs β-reduction, `let` inlining,
+field projection, record `//` merge, and `List/fold` while preserving
+every `Note s` so the AST walker (`extractAssertionLocs`) can capture
+each assertion's location. Then `Dhall.normalize` + `Dhall.extract`
+decode the value side, and `attachLocs` splices the locations back in
+by their `(mappingIdx, assertionIdx)`. Standard `Dhall.normalize` would
+discard `Note`, so we cannot use it for the location pass. The plan can
+be authored in any of the natural shapes — direct record literal,
+`Plan.make`/`Plan.onAll`/`Plan.forRole`/`Plan.forTag`/`Plan.forHost`,
+or with `Spec.module_` wrapping a list — and per-assertion locations
+will still surface.
 
 ### 5.3 `PanInfraSpec.Resolve`
 

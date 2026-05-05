@@ -4,6 +4,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import PanInfraSpec.Emit (backendAllowedKinds, emitFor, knownBackends)
+import PanInfraSpec.Emit.SourceMap (defaultEmitOptions)
 import PanInfraSpec.IR (ExecutionPlan (..))
 import PanInfraSpec.Layout (defaultLayout)
 import PanInfraSpec.Scaffold.Defaults.Serverspec (defaultServerspecScaffold)
@@ -34,5 +35,5 @@ allowedKindsUnknown =
 emitForUnknown :: IO ()
 emitForUnknown =
   let ep = ExecutionPlan "ghost" []
-  in emitFor defaultServerspecScaffold defaultLayout ep
+  in emitFor defaultServerspecScaffold defaultLayout ep defaultEmitOptions
        @?= Left "unknown backend: ghost"

@@ -7,6 +7,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import PanInfraSpec.Emit (emitFor)
+import PanInfraSpec.Emit.SourceMap (defaultEmitOptions)
 import PanInfraSpec.Scaffold.Defaults.Serverspec (defaultServerspecScaffold)
 import PanInfraSpec.IR hiding (Assertion)
 import qualified PanInfraSpec.IR as IR
@@ -34,7 +35,7 @@ tests = testGroup "customAttributes & ALRubyExpr"
 emitOne :: Node -> IR.Assertion -> Either Text Text
 emitOne node assertion =
   let ep = ExecutionPlan "serverspec" [Job node [assertion]]
-  in case emitFor defaultServerspecScaffold defaultLayout ep of
+  in case emitFor defaultServerspecScaffold defaultLayout ep defaultEmitOptions of
        Left e     -> Left e
        Right outs -> case Map.lookup (T.unpack (hostname node) <> "_spec.rb") outs of
          Just t  -> Right t
@@ -61,7 +62,7 @@ assertContains needle = \case
 --   its(:value) { should be > <expr> }
 mysqlCompareExpr :: IO ()
 mysqlCompareExpr =
-  let assertion = IR.Assertion "mysql_config" "innodb_buffer_pool_size"
+  let assertion = IR.mkAssertion "mysql_config" "innodb_buffer_pool_size"
         (Map.singleton "value"
            (AVCompare OpGt (ALRubyExpr "paninfraspec_total_ram_kb.to_i * 1024 * 70 / 100"))) Nothing
    in assertContains
@@ -71,7 +72,7 @@ mysqlCompareExpr =
 -- | php_config + AVCompare OpLe (ALRubyExpr ...)
 phpCompareExpr :: IO ()
 phpCompareExpr =
-  let assertion = IR.Assertion "php_config" "memory_limit"
+  let assertion = IR.mkAssertion "php_config" "memory_limit"
         (Map.singleton "value"
            (AVCompare OpLe (ALRubyExpr "paninfraspec_php_max_mb.to_i"))) Nothing
    in assertContains
@@ -81,7 +82,7 @@ phpCompareExpr =
 -- | x509_certificate + AVCompare OpGe (ALRubyExpr ...)
 x509CompareExpr :: IO ()
 x509CompareExpr =
-  let assertion = IR.Assertion "x509_certificate" "/etc/ssl/cert.pem"
+  let assertion = IR.mkAssertion "x509_certificate" "/etc/ssl/cert.pem"
         (Map.singleton "validity_in_days"
            (AVCompare OpGe (ALRubyExpr "paninfraspec_min_cert_days.to_i"))) Nothing
    in assertContains
@@ -91,7 +92,7 @@ x509CompareExpr =
 -- | Trivial command assertion used as a stable describe block while we focus
 -- on preamble behaviour.
 unameAssertion :: IR.Assertion
-unameAssertion = IR.Assertion "command" "uname -a"
+unameAssertion = IR.mkAssertion "command" "uname -a"
   (Map.singleton "exit-status" (AVNat 0)) Nothing
 
 withCustom :: [CustomAttribute] -> Node -> Node

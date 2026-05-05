@@ -10,6 +10,7 @@ import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 
 import PanInfraSpec.Emit.Backend (BackendEntry (..))
+import PanInfraSpec.Emit.SourceMap (EmitOptions)
 import qualified PanInfraSpec.Emit.Serverspec as Serverspec
 import PanInfraSpec.IR
 import PanInfraSpec.Layout (Layout)
@@ -39,8 +40,13 @@ backendAllowedKinds name =
 -- inventory-derived auxiliaries); 'Layout' still owns per-host spec-file paths.
 -- Misrouted backend calls return the historical @"unknown backend: <name>"@
 -- error message so callers (and tests) can match on it.
-emitFor :: Scaffold -> Layout -> ExecutionPlan -> Either Text (Map FilePath Text)
-emitFor scaffold layout ep =
+emitFor
+  :: Scaffold
+  -> Layout
+  -> ExecutionPlan
+  -> EmitOptions
+  -> Either Text (Map FilePath Text)
+emitFor scaffold layout ep opts =
   case Map.lookup (epTargetBackend ep) registry of
-    Just entry -> beEmitter entry scaffold layout ep
+    Just entry -> beEmitter entry scaffold layout ep opts
     Nothing    -> Left ("unknown backend: " <> epTargetBackend ep)
