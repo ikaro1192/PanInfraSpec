@@ -19,7 +19,6 @@ Have an idea? Before opening an issue, please search [existing issues](https://g
 - The problem or use case you're trying to solve
 - Your proposed solution or behavior
 - Which axis it touches — inventory, plan, layout, scaffold, IR, or a specific backend emitter
-- How it fits with the [Design Principles](#design-principles) of PanInfraSpec
 
 PanInfraSpec is designed to grow along specific axes — new backend emitters, new Dhall preludes, new source-of-truth adapters, additional resources in existing preludes — and contributions in those directions are very welcome. What it tries *not* to grow into is a test runner, a config-management runtime, or a durable inventory store; proposals heading that way, or ones that would require backend-specific concepts to leak into the IR, may not be accepted. Discussing the idea upfront in an issue is always a good start.
 
@@ -118,17 +117,6 @@ Before submitting a PR, please search [existing issues and PRs](https://github.c
 - Update `docs/` if your change affects CLI flags, Dhall preludes, output layout, or other observable behavior
 - Update `README.md` if your change affects the quickstart or the documented input axes
 - Include `Fixes #<issue>` in the PR body to link the issue
-
-## Design Principles
-
-To keep PanInfraSpec simple and reliable, contributions should align with its core philosophy:
-
-- **Backend-agnostic IR** — the semantic IR is the contract between input and output. New backends plug in as a Dhall prelude + emitter; they must not require IR changes.
-- **Reject unsound input early** — Dhall smart constructors disallow nonsensical combinations (e.g. `service "nginx" PackageState.Installed`) at parse time; the resolver fails fast on conflicting assertions rather than emitting spec files that are guaranteed to fail at run time.
-- **Generator only, not a runner** — PanInfraSpec emits spec files; the backend's own runner (`rake spec`, `inspec exec`, …) executes them. We do not embed test execution.
-- **Deterministic, regeneratable output** — given the same inputs, generation produces byte-identical output. Golden tests guard this.
-- **Pure Haskell, statically linkable** — preserve the no-C-deps property so `nix build` and the release tarballs stay self-contained across Linux / macOS / Windows.
-- **Do one thing well** — input axes (inventory / plan / layout / scaffold) compose freely, but the tool stays a generator. It is not an inventory database, not a config-management runtime, and not a test runner.
 
 ## License
 
