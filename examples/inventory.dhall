@@ -23,12 +23,24 @@ in  [ { hostname         = "web01"
       , role             = "DBPrimary"
       , tags             = [ "metrics" ]
       , customAttributes =
-          -- Read /proc/meminfo on the target so the plan's mysql_config
-          -- CompareExpr can size innodb_buffer_pool_size relative to
-          -- this host's actual RAM. Bound as `paninfraspec_total_ram_kb`
-          -- in the generated db01_spec.rb.
+          -- Per-host facts referenced by the bundled example plans.
+          --
+          --   * `total_ram_kb` — RAM in KiB, used by examples/plan.dhall
+          --     and examples/plan-typed-expr.dhall to size
+          --     `innodb_buffer_pool_size` relative to this host's actual
+          --     RAM. Bound as `paninfraspec_total_ram_kb` in the
+          --     generated db01_spec.rb.
+          --
+          --   * `max_clients` — application-defined upper bound on
+          --     concurrent clients, exercised by the typed-expression
+          --     `exprSub` / `exprDiv` examples in
+          --     examples/plan-typed-expr.dhall. Replace the placeholder
+          --     command with whatever fits your environment.
           [ { name    = "total_ram_kb"
             , command = "awk '/MemTotal/ {print \$2}' /proc/meminfo"
+            }
+          , { name    = "max_clients"
+            , command = "echo 200"
             }
           ]
       }

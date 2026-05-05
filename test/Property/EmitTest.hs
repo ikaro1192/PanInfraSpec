@@ -66,20 +66,58 @@ genValue = \case
   ATCompare -> AVCompare <$> elements [OpLt, OpLe, OpGt, OpGe, OpEq] <*> genLeaf
 
 -- | Generate a scalar 'AttrLeaf'. Used inside 'AVList' / 'AVRecord' / 'AVCompare'.
+-- 'ALExpr' is mixed in so the typed expression sub-IR is exercised by
+-- 'prop_no_unreachable_in_output' (the renderer must handle every
+-- 'Expr' / 'Operand' constructor) and by 'prop_emit_total_for_valid'
+-- (typed exprs inside any schema-allowed compound 'AttrValue' must not
+-- crash the emitter).
 genLeaf :: Gen AttrLeaf
-genLeaf = elements [ATText, ATNat, ATBool, ATSymbol] >>= \case
-  ATText    -> ALText   . T.pack <$> shortAlphaNum
-  ATNat     -> ALNat    . fromIntegral <$> choose (0 :: Int, 65535)
-  ATBool    -> pure (ALBool True)
-  ATSymbol  -> ALSymbol . T.pack <$> shortAlphaNum
-  ATList    -> ALText   . T.pack <$> shortAlphaNum  -- unreachable; satisfies totality
-  ATRecord  -> ALText   . T.pack <$> shortAlphaNum  -- unreachable; satisfies totality
-  ATCompare -> ALText   . T.pack <$> shortAlphaNum  -- unreachable; satisfies totality
+genLeaf = oneof
+  [ ALText   . T.pack <$> shortAlphaNum
+  , ALNat    . fromIntegral <$> choose (0 :: Int, 65535)
+  , pure (ALBool True)
+  , ALSymbol . T.pack <$> shortAlphaNum
+  , ALExpr  <$> genExpr
+  ]
+
+-- | Generate a typed 'Expr'. 'ExprFactIntScaled' divisors are bounded
+-- to >= 1 so the rendered Ruby is at least syntactically a non-pathological
+-- integer division (a divisor of 0 still survives 'emit', but reads as
+-- garbage in any subsequent eyeball check).
+genExpr :: Gen Expr
+genExpr = oneof
+  [ ExprFactInt <$> shortIdentT
+  , ExprFactIntScaled
+      <$> shortIdentT
+      <*> listOf (fromIntegral <$> choose (1 :: Int, 4096))
+      <*> (fromIntegral <$> choose (1 :: Int, 4096))
+  , ExprAdd <$> genOperand <*> genOperand
+  , ExprSub <$> genOperand <*> genOperand
+  , ExprMul <$> genOperand <*> genOperand
+  , ExprDiv <$> genOperand <*> genOperand
+  ]
+
+genOperand :: Gen Operand
+genOperand = oneof
+  [ OpLit . fromIntegral <$> choose (0 :: Int, 65535)
+  , OpFact <$> shortIdentT
+  ]
 
 shortAlphaNum :: Gen String
 shortAlphaNum = do
   n <- choose (1, 12)
   vectorOf n (elements (['a'..'z'] <> ['0'..'9'] <> "-_/"))
+
+-- | Like 'shortAlphaNum' but restricted to characters that survive
+-- interpolation into a Ruby identifier (@paninfraspec_<name>@). The
+-- broader 'shortAlphaNum' alphabet contains @-@/@/@ which break Ruby
+-- syntax when embedded as a bare variable name.
+shortIdentT :: Gen Text
+shortIdentT = T.pack <$> do
+  n  <- choose (1, 12)
+  hd <- elements (['a'..'z'] <> "_")
+  tl <- vectorOf (n - 1) (elements (['a'..'z'] <> ['0'..'9'] <> "_"))
+  pure (hd : tl)
 
 -- | Generate a primary key suitable for the given kind.
 genPrimaryKey :: Text -> Gen Text

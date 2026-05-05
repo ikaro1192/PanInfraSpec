@@ -98,12 +98,57 @@ paninfraspec_total_ram_kb = Specinfra.backend.run_command("awk '/MemTotal/ {prin
 (`^[a-z_][a-zA-Z0-9_]*$`); duplicates within the same host and empty
 names/commands are rejected at generate time.
 
-**Step 2: reference it from the plan with `expand_attr`.**
+**Step 2: reference it from the plan.** PanInfraSpec offers two paths —
+prefer the typed one when the pattern fits.
+
+### Typed expression path (preferred)
 
 ```dhall
 -- Pin to a tag and `dhall freeze` for production use.
 let Spec = https://raw.githubusercontent.com/ikaro1192/PanInfraSpec/main/dhall/Serverspec.dhall
 
+in  Spec.mysqlConfig "innodb_buffer_pool_size"
+      ( Spec.MysqlConfigState.CompareTypedExpr
+          { op    = Spec.CompareOp.Ge
+          , value = Spec.factIntScaled "total_ram_kb" [1024, 70] 100
+          }
+      )
+```
+
+`factIntScaled "n" [m1, m2, ...] d` renders as
+`paninfraspec_n.to_i * m1 * m2 ... / d`; the unary `factInt "n"` renders
+as `paninfraspec_n.to_i`. Both live in the typed sub-IR
+(`Spec.Expr`) and are checked by Dhall — typos in the multipliers or
+divisor are caught at parse time, not at spec run time. `CompareTypedExpr`
+is available on `MysqlConfigState` and `PhpConfigState`;
+`X509CertificateState` exposes the same shape as
+`ValidityInDaysCompareTypedExpr`.
+
+The sub-IR also covers binary arithmetic over a flat `Operand`
+(numeric literal or host fact reference):
+
+| Helper | Renders to |
+|---|---|
+| `Spec.factInt "n"`                       | `paninfraspec_n.to_i` |
+| `Spec.factIntScaled "n" [m1, m2] d`      | `paninfraspec_n.to_i * m1 * m2 / d` |
+| `Spec.percentOf p "n"`                   | `paninfraspec_n.to_i * p / 100` (sugar for `factIntScaled "n" [p] 100`) |
+| `Spec.exprAdd (Spec.opFact "a") (Spec.opFact "b")` | `paninfraspec_a.to_i + paninfraspec_b.to_i` |
+| `Spec.exprSub (Spec.opFact "t") (Spec.opLit 50)`   | `paninfraspec_t.to_i - 50` |
+| `Spec.exprMul (Spec.opLit 2) (Spec.opFact "x")`    | `2 * paninfraspec_x.to_i` |
+| `Spec.exprDiv (Spec.opFact "n") (Spec.opLit 4)`    | `paninfraspec_n.to_i / 4` |
+
+`opLit` / `opFact` are the two `Operand` constructors. The binary
+constructors take `Operand` (not `Expr`) on both sides because Dhall
+lacks recursive types — to compose more than two terms, use
+`factIntScaled` for the `fact * lit * ... / lit` shape, or fall back to
+the escape hatch.
+
+### Escape hatch (`CompareExpr` + `expand_attr`)
+
+For patterns the typed sub-IR does not yet cover, fall back to embedding a
+raw Ruby fragment:
+
+```dhall
 in  Spec.mysqlConfig "innodb_buffer_pool_size"
       ( Spec.MysqlConfigState.CompareExpr
           { op    = Spec.CompareOp.Gt
@@ -114,28 +159,36 @@ in  Spec.mysqlConfig "innodb_buffer_pool_size"
 ```
 
 `Spec.expand_attr "<name>"` is the only place the `paninfraspec_` prefix
-appears — the generator owns it and may rename it; your plans never need to
-hard-code the prefix string. The generated assertion is:
+appears — the generator owns it and may rename it; your plans never need
+to hard-code the prefix string. The `value : Text` field is emitted **as
+bare Ruby**, so you can chain `.to_i`/`.to_f` and use arithmetic
+operators. The existing `Compare` (`Natural`) variants stay available for
+static thresholds. For Ruby expressions in contexts other than the three
+`*ConfigState` types, use `AttrLeaf.ALRubyExpr` directly — that is the
+underlying constructor everything else (`expand_attr`, `CompareExpr`) is
+sugar on top.
+
+**Both paths produce the same Ruby.** The typed and escape-hatch
+snippets above generate byte-identical assertions:
 
 ```ruby
 describe mysql_config('innodb_buffer_pool_size') do
-  its(:value) { should be > paninfraspec_total_ram_kb.to_i * 1024 * 70 / 100 }
+  its(:value) { should be >= paninfraspec_total_ram_kb.to_i * 1024 * 70 / 100 }
 end
 ```
 
-`CompareExpr` is available on `MysqlConfigState`, `PhpConfigState`, and
-`X509CertificateState` (as `ValidityInDaysCompareExpr`). The `value : Text`
-field is emitted **as bare Ruby**, so you can chain `.to_i`/`.to_f` and use
-arithmetic operators. The existing `Compare` (`Natural`) variants stay
-available for static thresholds.
+### Escape-hatch policy
 
-**Escape hatch.** If you need a Ruby expression in a context other than the
-three `*ConfigState` types, use `AttrLeaf.ALRubyExpr` directly. That is the
-underlying constructor; everything else (`expand_attr`, `CompareExpr`) is
-sugar on top.
+The `ALRubyExpr` / `expand_attr` / `CompareExpr` family is a deliberate
+escape hatch, not the recommended path. If you find yourself reaching
+for it repeatedly for the same shape of expression, that is a signal to
+file an issue requesting a first-class typed constructor (see
+[issue #57](https://github.com/ikaro1192/PanInfraSpec/issues/57)) — the
+typed sub-IR grows additively as recurring patterns are observed.
 
 **Out of scope.** PanInfraSpec does not statically check that a
 `paninfraspec_<name>` token in a `value` string actually resolves to a
-declared `customAttribute` — an undefined reference fails at spec runtime
-with `NameError`. Use `expand_attr` (rather than hand-writing the prefix) to
-keep typos visible in code review.
+declared `customAttribute` — an undefined reference fails at spec
+runtime with `NameError`. Use `expand_attr` / `factInt` / `factIntScaled`
+(rather than hand-writing the prefix) to keep typos visible in code
+review.

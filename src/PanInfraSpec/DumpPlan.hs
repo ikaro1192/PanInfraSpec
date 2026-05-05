@@ -69,6 +69,23 @@ renderLeaf = \case
   ALSymbol   s -> ":" <> s
   ALRegex    p -> "/" <> p <> "/"
   ALRubyExpr e -> "{ruby:" <> e <> "}"
+  ALExpr     e -> "{expr:" <> renderExprDump e <> "}"
+
+renderExprDump :: Expr -> Text
+renderExprDump = \case
+  ExprFactInt n -> "fact(" <> n <> ").to_i"
+  ExprFactIntScaled n muls d ->
+    let mulsTxt = T.concat ["*" <> tshow m | m <- muls]
+    in "fact(" <> n <> ").to_i" <> mulsTxt <> "/" <> tshow d
+  ExprAdd l r -> renderOperandDump l <> "+" <> renderOperandDump r
+  ExprSub l r -> renderOperandDump l <> "-" <> renderOperandDump r
+  ExprMul l r -> renderOperandDump l <> "*" <> renderOperandDump r
+  ExprDiv l r -> renderOperandDump l <> "/" <> renderOperandDump r
+
+renderOperandDump :: Operand -> Text
+renderOperandDump = \case
+  OpLit  n -> tshow n
+  OpFact n -> "fact(" <> n <> ").to_i"
 
 renderOp :: CompareOp -> Text
 renderOp = \case

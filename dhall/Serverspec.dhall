@@ -5,6 +5,32 @@
 
 let CompareOp = < Lt | Le | Gt | Ge | Eq | Match >
 
+-- Typed expression sub-IR (issue #57). Promotes the most common
+-- `ALRubyExpr` patterns into typed, backend-agnostic constructors so plans
+-- can express them in Dhall without dropping into an opaque string.
+-- Kept flat (non-recursive) because Dhall lacks recursive types — grow
+-- additively as new recurring escape-hatch patterns are observed.
+--
+-- The binary `Add`/`Sub`/`Mul`/`Div` constructors take `Operand` (a
+-- numeric literal or a host customAttribute reference) on both sides,
+-- never another `Expr`, for the same Dhall-no-recursive-types reason
+-- that keeps `Selector` boolean composition Haskell-only. Compose more
+-- than two terms with `FactIntScaled` (for the `fact * m1 * ... / d`
+-- shape) or fall back to `ALRubyExpr` for anything richer.
+let Operand =
+      < Lit  : Natural
+      | Fact : Text
+      >
+
+let Expr =
+      < FactInt       : Text
+      | FactIntScaled : { name : Text, muls : List Natural, divisor : Natural }
+      | Add           : { left : Operand, right : Operand }
+      | Sub           : { left : Operand, right : Operand }
+      | Mul           : { left : Operand, right : Operand }
+      | Div           : { left : Operand, right : Operand }
+      >
+
 let AttrLeaf =
       < ALText     : Text
       | ALNat      : Natural
@@ -12,6 +38,7 @@ let AttrLeaf =
       | ALSymbol   : Text
       | ALRegex    : Text
       | ALRubyExpr : Text
+      | ALExpr     : Expr
       >
 
 let AttrValue =
@@ -153,8 +180,9 @@ let CronState =
       | HasEntryAsUser : { entry : Text, user : Text }
       >
 let X509CertificateState =
-      < ValidityInDaysCompare     : { op : CompareOp, value : Natural }
-      | ValidityInDaysCompareExpr : { op : CompareOp, value : Text }
+      < ValidityInDaysCompare          : { op : CompareOp, value : Natural }
+      | ValidityInDaysCompareExpr      : { op : CompareOp, value : Text }
+      | ValidityInDaysCompareTypedExpr : { op : CompareOp, value : Expr }
       >
 let WindowsRegistryKeyState =
       < HasProperty      : { name : Text, propertyType : Text }
@@ -184,18 +212,20 @@ let IisWebsiteState =
       >
 
 let MysqlConfigState =
-      < EqText      : Text
-      | EqNat       : Natural
-      | Compare     : { op : CompareOp, value : Natural }
-      | CompareExpr : { op : CompareOp, value : Text }
+      < EqText           : Text
+      | EqNat            : Natural
+      | Compare          : { op : CompareOp, value : Natural }
+      | CompareExpr      : { op : CompareOp, value : Text }
+      | CompareTypedExpr : { op : CompareOp, value : Expr }
       >
 
 let PhpConfigState =
-      < EqText      : Text
-      | EqNat       : Natural
-      | Compare     : { op : CompareOp, value : Natural }
-      | CompareExpr : { op : CompareOp, value : Text }
-      | Match       : Text
+      < EqText           : Text
+      | EqNat            : Natural
+      | Compare          : { op : CompareOp, value : Natural }
+      | CompareExpr      : { op : CompareOp, value : Text }
+      | CompareTypedExpr : { op : CompareOp, value : Expr }
+      | Match            : Text
       >
 
 let X509PrivateKeyState =
@@ -642,6 +672,13 @@ let x509CertificateStateAttrs =
                       AttrValue.AVCompare
                         { op = c.op, value = AttrLeaf.ALRubyExpr c.value }
                   }
+          , ValidityInDaysCompareTypedExpr =
+              \(c : { op : CompareOp, value : Expr }) ->
+                toMap
+                  { validity_in_days =
+                      AttrValue.AVCompare
+                        { op = c.op, value = AttrLeaf.ALExpr c.value }
+                  }
           }
           s
 
@@ -757,6 +794,13 @@ let mysqlConfigStateAttrs =
                       AttrValue.AVCompare
                         { op = c.op, value = AttrLeaf.ALRubyExpr c.value }
                   }
+          , CompareTypedExpr =
+              \(c : { op : CompareOp, value : Expr }) ->
+                toMap
+                  { value =
+                      AttrValue.AVCompare
+                        { op = c.op, value = AttrLeaf.ALExpr c.value }
+                  }
           }
           s
 
@@ -790,6 +834,13 @@ let phpConfigStateAttrs =
                   { value =
                       AttrValue.AVCompare
                         { op = c.op, value = AttrLeaf.ALRubyExpr c.value }
+                  }
+          , CompareTypedExpr =
+              \(c : { op : CompareOp, value : Expr }) ->
+                toMap
+                  { value =
+                      AttrValue.AVCompare
+                        { op = c.op, value = AttrLeaf.ALExpr c.value }
                   }
           , Match =
               \(p : Text) ->
@@ -1279,6 +1330,64 @@ let expand_attr
     : Text -> Text
     = \(name : Text) -> "paninfraspec_" ++ name
 
+-- | Typed equivalent of @expand_attr "n" ++ ".to_i"@. Renders to
+-- @paninfraspec_<name>.to_i@.
+let factInt
+    : Text -> Expr
+    = \(name : Text) -> Expr.FactInt name
+
+-- | Typed equivalent of @expand_attr "n" ++ ".to_i * m1 * m2 ... / d"@.
+-- Multipliers are applied left-to-right then divided once. Use this for
+-- per-host arithmetic patterns (memory %, unit conversions) that would
+-- otherwise be written as a string-embedded Ruby fragment via
+-- @CompareExpr@.
+let factIntScaled
+    : Text -> List Natural -> Natural -> Expr
+    = \(name : Text) ->
+      \(muls : List Natural) ->
+      \(divisor : Natural) ->
+        Expr.FactIntScaled
+          { name = name, muls = muls, divisor = divisor }
+
+-- | Operand smart constructors for the binary `Add`/`Sub`/`Mul`/`Div`
+-- expression shapes.
+let opLit
+    : Natural -> Operand
+    = \(n : Natural) -> Operand.Lit n
+
+let opFact
+    : Text -> Operand
+    = \(name : Text) -> Operand.Fact name
+
+-- | Two-operand arithmetic. Each operand is either a numeric literal
+-- (`opLit`) or a host customAttribute reference (`opFact`); both render
+-- as Ruby atoms so no parens are emitted at the join.
+let exprAdd
+    : Operand -> Operand -> Expr
+    = \(a : Operand) -> \(b : Operand) -> Expr.Add { left = a, right = b }
+
+let exprSub
+    : Operand -> Operand -> Expr
+    = \(a : Operand) -> \(b : Operand) -> Expr.Sub { left = a, right = b }
+
+let exprMul
+    : Operand -> Operand -> Expr
+    = \(a : Operand) -> \(b : Operand) -> Expr.Mul { left = a, right = b }
+
+let exprDiv
+    : Operand -> Operand -> Expr
+    = \(a : Operand) -> \(b : Operand) -> Expr.Div { left = a, right = b }
+
+-- | Sugar for the common "@N%@ of host fact" ratio pattern.
+-- @percentOf 70 "total_ram_kb"@ expands to
+-- @paninfraspec_total_ram_kb.to_i * 70 / 100@.
+let percentOf
+    : Natural -> Text -> Expr
+    = \(percent : Natural) ->
+      \(name : Text) ->
+        Expr.FactIntScaled
+          { name = name, muls = [percent], divisor = 100 }
+
 -- | Tag every assertion in the list with a product label. The emitter then
 -- groups assertions by label so a single host can produce multiple spec
 -- files (e.g. @Web/nginx_spec.rb@ and @Web/php_spec.rb@). Module-aware
@@ -1303,6 +1412,8 @@ let module_
 
 in  { AttrValue         = AttrValue
     , AttrLeaf          = AttrLeaf
+    , Expr              = Expr
+    , Operand           = Operand
     , CompareOp         = CompareOp
     , Assertion         = Assertion
     , ServiceState      = ServiceState
@@ -1392,6 +1503,18 @@ in  { AttrValue         = AttrValue
     , dockerImage           = dockerImage
     -- Custom-attribute references (Inventory.customAttributes)
     , expand_attr          = expand_attr
+    -- Typed expression IR (issue #57): preferred over `expand_attr`
+    -- string-concat for the most common per-host arithmetic patterns.
+    , factInt              = factInt
+    , factIntScaled        = factIntScaled
+    , percentOf            = percentOf
+    -- Operand smart constructors and binary arithmetic over Operands.
+    , opLit                = opLit
+    , opFact               = opFact
+    , exprAdd              = exprAdd
+    , exprSub              = exprSub
+    , exprMul              = exprMul
+    , exprDiv              = exprDiv
     -- Product-label wrapper that tags assertions for per-module file split
     -- (`module` is a Dhall reserved-ish word in some preludes, so the field
     -- name uses an underscore suffix; users invoke it as `Spec.module_`).

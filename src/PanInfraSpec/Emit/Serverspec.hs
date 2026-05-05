@@ -600,6 +600,37 @@ renderLeafRuby = \case
   ALSymbol   s -> ":" <> pretty s
   ALRegex    p -> "/" <> pretty p <> "/"
   ALRubyExpr e -> pretty e
+  ALExpr     e -> renderExpr e
+
+-- | Render a typed 'Expr' as Ruby. The string layout (operator order,
+-- spacing) is intentionally byte-identical to the equivalent
+-- @ALRubyExpr "..."@ form so that migrating a plan from the escape
+-- hatch to the typed path leaves the generated spec file unchanged.
+--
+-- Binary constructors take 'Operand' (literal or fact reference) on
+-- both sides, never another 'Expr', because Dhall lacks recursive
+-- types. The operands are atoms in Ruby precedence terms, so no
+-- bracketing is needed at the binary-op level.
+renderExpr :: Expr -> Doc ann
+renderExpr = \case
+  ExprFactInt n ->
+    "paninfraspec_" <> pretty n <> ".to_i"
+  ExprFactIntScaled n muls d ->
+    hsep $ ["paninfraspec_" <> pretty n <> ".to_i"]
+        ++ ["*" <+> pretty m | m <- muls]
+        ++ ["/" <+> pretty d]
+  ExprAdd l r -> renderOperand l <+> "+" <+> renderOperand r
+  ExprSub l r -> renderOperand l <+> "-" <+> renderOperand r
+  ExprMul l r -> renderOperand l <+> "*" <+> renderOperand r
+  ExprDiv l r -> renderOperand l <+> "/" <+> renderOperand r
+
+-- | Render a single 'Operand'. Both shapes are Ruby atoms (a numeric
+-- literal or @paninfraspec_\<n\>.to_i@), so no parens are needed when
+-- they sit on either side of a binary operator.
+renderOperand :: Operand -> Doc ann
+renderOperand = \case
+  OpLit  n -> pretty n
+  OpFact n -> "paninfraspec_" <> pretty n <> ".to_i"
 
 -- | Render a record as @:k => v, :k => v@ (Ruby keyword-arg syntax). Used
 -- by @host.be_reachable.with@, @routing_table.have_entry@, etc.

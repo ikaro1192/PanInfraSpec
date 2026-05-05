@@ -18,6 +18,7 @@ import qualified Dhall
 
 import PanInfraSpec.IR.Inventory (Node)
 import PanInfraSpec.IR.Selector  (Selector)
+import PanInfraSpec.IR.Expr      (Expr)
 
 -- | Comparison operator for 'AVCompare'. Mirrors the Dhall union
 -- @< Lt | Le | Gt | Ge | Eq | Match >@. Used for matchers like
@@ -51,6 +52,11 @@ data AttrLeaf
                       -- @paninfraspec_total_ram_kb.to_i * 1024 * 70 \/ 100@).
                       -- Unlike 'ALText', no escaping or surrounding quotes
                       -- are added — the user is asserting "this is Ruby".
+  | ALExpr     Expr   -- ^ Typed expression IR ('PanInfraSpec.IR.Expr.Expr').
+                      -- Promotes the most common 'ALRubyExpr' patterns into
+                      -- typed, backend-agnostic constructors so plans can
+                      -- express them in Dhall without dropping into an
+                      -- opaque string.
   deriving stock (Show, Eq, Generic)
 
 instance Dhall.FromDhall AttrLeaf where
@@ -61,6 +67,7 @@ instance Dhall.FromDhall AttrLeaf where
     <> (ALSymbol   <$> Dhall.constructor "ALSymbol"   Dhall.auto)
     <> (ALRegex    <$> Dhall.constructor "ALRegex"    Dhall.auto)
     <> (ALRubyExpr <$> Dhall.constructor "ALRubyExpr" Dhall.auto)
+    <> (ALExpr     <$> Dhall.constructor "ALExpr"     Dhall.auto)
     )
 
 -- | Attribute value carried inside an 'Assertion'. Mirrors the Dhall union
