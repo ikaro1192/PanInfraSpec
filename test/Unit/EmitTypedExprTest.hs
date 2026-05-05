@@ -7,6 +7,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import PanInfraSpec.Emit (emitFor)
+import PanInfraSpec.Emit.SourceMap (defaultEmitOptions)
 import PanInfraSpec.Scaffold.Defaults.Serverspec (defaultServerspecScaffold)
 import PanInfraSpec.IR hiding (Assertion)
 import qualified PanInfraSpec.IR as IR
@@ -35,7 +36,7 @@ tests = testGroup "typed expression IR (ALExpr)"
 emitOne :: Node -> IR.Assertion -> Either Text Text
 emitOne node assertion =
   let ep = ExecutionPlan "serverspec" [Job node [assertion]]
-  in case emitFor defaultServerspecScaffold defaultLayout ep of
+  in case emitFor defaultServerspecScaffold defaultLayout ep defaultEmitOptions of
        Left e     -> Left e
        Right outs -> case Map.lookup (T.unpack (hostname node) <> "_spec.rb") outs of
          Just t  -> Right t
@@ -61,7 +62,7 @@ assertContains needle = \case
 
 factIntRenders :: IO ()
 factIntRenders =
-  let assertion = IR.Assertion "php_config" "memory_limit"
+  let assertion = IR.mkAssertion "php_config" "memory_limit"
         (Map.singleton "value"
            (AVCompare OpLe (ALExpr (ExprFactInt "php_max_mb")))) Nothing
    in assertContains
@@ -70,7 +71,7 @@ factIntRenders =
 
 scaledEmptyMulsRenders :: IO ()
 scaledEmptyMulsRenders =
-  let assertion = IR.Assertion "x509_certificate" "/etc/ssl/cert.pem"
+  let assertion = IR.mkAssertion "x509_certificate" "/etc/ssl/cert.pem"
         (Map.singleton "validity_in_days"
            (AVCompare OpGe (ALExpr (ExprFactIntScaled "min_cert_days" [] 1)))) Nothing
    in assertContains
@@ -79,7 +80,7 @@ scaledEmptyMulsRenders =
 
 scaledMultiMulsRenders :: IO ()
 scaledMultiMulsRenders =
-  let assertion = IR.Assertion "mysql_config" "innodb_buffer_pool_size"
+  let assertion = IR.mkAssertion "mysql_config" "innodb_buffer_pool_size"
         (Map.singleton "value"
            (AVCompare OpGt (ALExpr (ExprFactIntScaled "ram" [2, 3, 5] 7)))) Nothing
    in assertContains
@@ -88,7 +89,7 @@ scaledMultiMulsRenders =
 
 memoryPercentByteIdentical :: IO ()
 memoryPercentByteIdentical =
-  let assertion = IR.Assertion "mysql_config" "innodb_buffer_pool_size"
+  let assertion = IR.mkAssertion "mysql_config" "innodb_buffer_pool_size"
         (Map.singleton "value"
            (AVCompare OpGt
               (ALExpr (ExprFactIntScaled "total_ram_kb" [1024, 70] 100)))) Nothing
@@ -97,7 +98,7 @@ memoryPercentByteIdentical =
         (emitOne (emptyNode "web01") assertion)
 
 mysqlExpr :: Expr -> IR.Assertion
-mysqlExpr e = IR.Assertion "mysql_config" "k"
+mysqlExpr e = IR.mkAssertion "mysql_config" "k"
   (Map.singleton "value" (AVCompare OpEq (ALExpr e))) Nothing
 
 addRenders :: IO ()

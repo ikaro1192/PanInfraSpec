@@ -28,6 +28,7 @@ import qualified Paths_paninfraspec as Paths
 import PanInfraSpec.Dhall (loadInventory, loadPlan, validate)
 import PanInfraSpec.DumpPlan (dumpPlan)
 import PanInfraSpec.Emit (emitFor)
+import PanInfraSpec.Emit.SourceMap (EmitOptions (..), defaultEmitOptions)
 import PanInfraSpec.Scaffold (Scaffold, loadScaffold)
 import PanInfraSpec.Scaffold.Defaults.Serverspec (defaultServerspecScaffold)
 import PanInfraSpec.IR
@@ -50,16 +51,18 @@ data InventorySource
   | FromTerraformState FilePath
 
 data Options = Options
-  { optInventory :: InventorySource
-  , optPlan      :: FilePath
-  , optTarget    :: Text
-  , optOut       :: FilePath
-  , optLayout    :: Maybe FilePath
-  , optScaffold  :: Maybe FilePath
-  , optOnlyRole  :: Maybe Text
-  , optOnlyHost  :: Maybe Text
-  , optOnlyTag   :: Maybe Text
-  , optDumpPlan  :: Bool
+  { optInventory      :: InventorySource
+  , optPlan           :: FilePath
+  , optTarget         :: Text
+  , optOut            :: FilePath
+  , optLayout         :: Maybe FilePath
+  , optScaffold       :: Maybe FilePath
+  , optOnlyRole       :: Maybe Text
+  , optOnlyHost       :: Maybe Text
+  , optOnlyTag        :: Maybe Text
+  , optDumpPlan          :: Bool
+  , optSourceComments    :: Bool
+  , optSourceLocInDescribe :: Bool
   }
 
 inventorySourceP :: Parser InventorySource
@@ -125,6 +128,16 @@ parser = Options
   <*> switch
         ( long "dump-plan"
        <> help "Print the resolved ExecutionPlan as a tree and exit (no output written)"
+        )
+  <*> flag True False
+        ( long "no-source-comments"
+       <> help "Suppress # src: provenance comments above generated describe blocks (byte-stable output)"
+        )
+  <*> switch
+        ( long "source-loc-in-describe"
+       <> help "Append the Dhall source location (file:line:col) to each describe \
+               \block's secondary description so rake spec output references the \
+               \originating plan line. Off by default; changes RSpec runtime output."
         )
 
 versionOption :: Parser (a -> a)
@@ -218,9 +231,14 @@ run opts@Options{..} = do
                            scaffoldRes <- resolveScaffold optScaffold
                            case scaffoldRes of
                              Left e -> die ("scaffold load failed: " <> e)
-                             Right scaffold -> case emitFor scaffold layout ep of
-                               Left e     -> die ("emit failed: " <> e)
-                               Right outs -> writeAll optOut outs
+                             Right scaffold ->
+                               let emitOpts = defaultEmitOptions
+                                                { sourceComments      = optSourceComments
+                                                , sourceLocInDescribe = optSourceLocInDescribe
+                                                }
+                               in case emitFor scaffold layout ep emitOpts of
+                                 Left e     -> die ("emit failed: " <> e)
+                                 Right outs -> writeAll optOut outs
 
 -- | Layer-1 check: the @--target@ flag must match the @targetBackend@ field
 -- the plan file forwards from its imported per-backend Dhall prelude.

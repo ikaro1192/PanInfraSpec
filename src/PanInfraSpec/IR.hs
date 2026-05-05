@@ -19,11 +19,13 @@ module PanInfraSpec.IR
   , Expr (..)
   , Operand (..)
   , Assertion (..)
+  , mkAssertion
   , Selector (..)
   , Mapping (..)
   , PlanFile (..)
   , Job (..)
   , ExecutionPlan (..)
+  , SourceLoc (..)
   , roleEncoder
   , customAttributeEncoder
   , nodeEncoder
@@ -39,11 +41,13 @@ import PanInfraSpec.IR.Inventory
   )
 import PanInfraSpec.IR.Selector  (Selector (..))
 import PanInfraSpec.IR.Expr      (Expr (..), Operand (..))
+import PanInfraSpec.IR.SourceLoc (SourceLoc (..))
 import PanInfraSpec.IR.Assertion
   ( CompareOp (..)
   , AttrLeaf (..)
   , AttrValue (..)
   , Assertion (..)
+  , mkAssertion
   , Mapping (..)
   , PlanFile (..)
   , Job (..)

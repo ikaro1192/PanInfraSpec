@@ -3,6 +3,7 @@ module PanInfraSpec.IR.Assertion
   , AttrLeaf (..)
   , AttrValue (..)
   , Assertion (..)
+  , mkAssertion
   , Mapping (..)
   , PlanFile (..)
   , Job (..)
@@ -19,6 +20,7 @@ import qualified Dhall
 import PanInfraSpec.IR.Inventory (Node)
 import PanInfraSpec.IR.Selector  (Selector)
 import PanInfraSpec.IR.Expr      (Expr)
+import PanInfraSpec.IR.SourceLoc (SourceLoc)
 
 -- | Comparison operator for 'AVCompare'. Mirrors the Dhall union
 -- @< Lt | Le | Gt | Ge | Eq | Match >@. Used for matchers like
@@ -122,6 +124,14 @@ data Assertion = Assertion
   , aPrimaryKey :: Text
   , aAttrs      :: Map Text AttrValue
   , aModule     :: Maybe Text
+  , aSourceLocs :: [SourceLoc]
+    -- ^ Where the assertion originated in its Dhall plan file. The Dhall
+    -- decoder leaves this empty; 'PanInfraSpec.Dhall.loadPlan' populates a
+    -- single 'SourceLoc' per assertion via an AST walker, and the Serverspec
+    -- emitter unions these as @mergeGroup@ collapses redundant assertions
+    -- on the same resource (@(aKind, aPrimaryKey)@). Each surviving
+    -- 'SourceLoc' becomes one @# src:@ provenance comment above the
+    -- generated @describe@ block.
   }
   deriving stock (Show, Eq, Generic)
 
@@ -132,6 +142,15 @@ instance Dhall.FromDhall Assertion where
       <*> Dhall.field "primaryKey" Dhall.auto
       <*> Dhall.field "attrs"      Dhall.auto
       <*> Dhall.field "module"     Dhall.auto
+      <*> pure []
+
+-- | Build an 'Assertion' with no source-location metadata. Convenience for
+-- callers that construct assertions outside the Dhall front-end — typically
+-- tests, scaffold defaults, and backend shims. 'PanInfraSpec.Dhall.loadPlan'
+-- populates 'aSourceLocs' separately via an AST walker, so plans loaded
+-- from disk never go through this helper.
+mkAssertion :: Text -> Text -> Map Text AttrValue -> Maybe Text -> Assertion
+mkAssertion k pk attrs m = Assertion k pk attrs m []
 
 -- | Binds a 'Selector' to the assertions that should apply to the matching
 -- nodes. Lives here (rather than alongside 'Selector') because 'Mapping'

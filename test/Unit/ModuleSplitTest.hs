@@ -7,6 +7,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import PanInfraSpec.Emit (emitFor)
+import PanInfraSpec.Emit.SourceMap (defaultEmitOptions)
 import PanInfraSpec.Scaffold.Defaults.Serverspec (defaultServerspecScaffold)
 import PanInfraSpec.IR hiding (Assertion)
 import qualified PanInfraSpec.IR as IR
@@ -26,13 +27,13 @@ mkNode :: Text -> Node
 mkNode h = Node h Nothing (Role "Web") [] []
 
 webAssert :: Text -> Maybe Text -> IR.Assertion
-webAssert pk modLabel = IR.Assertion "package" pk
+webAssert pk modLabel = IR.mkAssertion "package" pk
   (Map.singleton "installed" (AVBool True)) modLabel
 
 emitWith :: Layout -> [IR.Assertion] -> Either Text (Map.Map FilePath Text)
 emitWith layout asserts =
   let ep = ExecutionPlan "serverspec" [Job (mkNode "web01") asserts]
-  in emitFor defaultServerspecScaffold layout ep
+  in emitFor defaultServerspecScaffold layout ep defaultEmitOptions
 
 splitsByModule :: IO ()
 splitsByModule = do
