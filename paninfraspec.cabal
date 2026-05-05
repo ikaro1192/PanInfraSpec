@@ -49,6 +49,9 @@ library
   hs-source-dirs:   src
   exposed-modules:
       PanInfraSpec.IR
+    , PanInfraSpec.IR.Inventory
+    , PanInfraSpec.IR.Selector
+    , PanInfraSpec.IR.Assertion
     , PanInfraSpec.Dhall
     , PanInfraSpec.Layout
     , PanInfraSpec.Resolve
@@ -81,6 +84,7 @@ test-suite paninfraspec-test
     , Unit.EmitCustomAttributesTest
     , Unit.ScaffoldTest
     , Unit.ModuleSplitTest
+    , Unit.IR.SplitTest
     , Roundtrip.DhallEncodingTest
     , Property.EmitTest
     , Synth.HundredHostsTest
