@@ -21,7 +21,7 @@ Have an idea? Before opening an issue, please search [existing issues](https://g
 - Which axis it touches — inventory, plan, layout, scaffold, IR, or a specific backend emitter
 - How it fits with the [Design Principles](#design-principles) of PanInfraSpec
 
-PanInfraSpec is intentionally focused in scope, so proposals that add significant complexity without a clear correctness or multi-backend benefit may not be accepted — but discussing it upfront is always a good start.
+PanInfraSpec is designed to grow along specific axes — new backend emitters, new Dhall preludes, new source-of-truth adapters, additional resources in existing preludes — and contributions in those directions are very welcome. What it tries *not* to grow into is a test runner, a config-management runtime, or a durable inventory store; proposals heading that way, or ones that would require backend-specific concepts to leak into the IR, may not be accepted. Discussing the idea upfront in an issue is always a good start.
 
 ## Prerequisites
 
@@ -109,7 +109,7 @@ Existing inputs, the IR, and other emitters must not change. If you find yoursel
 
 ## Pull Requests
 
-Before submitting a PR, please search [existing issues and PRs](https://github.com/ikaro1192/PanInfraSpec/issues) to check whether the same change is already in progress. Then open an issue to discuss the approach first. The only exceptions are obvious typo fixes or trivial documentation corrections. Even well-implemented PRs may be declined if they would introduce ongoing maintenance burden that outweighs their benefit — discussing the idea upfront helps avoid that.
+Before submitting a PR, please search [existing issues and PRs](https://github.com/ikaro1192/PanInfraSpec/issues) to check whether the same change is already in progress. For non-trivial changes, opening an issue to discuss the approach first helps avoid wasted work — especially for changes that touch the IR, the dispatcher, or add a new backend. Obvious typo fixes and small documentation corrections can skip that step.
 
 - One logical change per PR
 - Ensure local tests pass (`cabal test all`)
