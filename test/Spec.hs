@@ -22,6 +22,7 @@ import qualified Roundtrip.DhallEncodingTest
 import qualified SoT.TerraformTest
 import qualified Synth.HundredHostsTest
 import qualified Unit.EmitCustomAttributesTest
+import qualified Unit.EmitTypedExprTest
 import qualified Unit.IR.SplitTest
 import qualified Unit.ScaffoldTest
 import qualified Unit.LayoutTest
@@ -34,6 +35,7 @@ main = defaultMain $ testGroup "paninfraspec"
   [ Unit.ValidateTest.tests
   , Unit.LayoutTest.tests
   , Unit.EmitCustomAttributesTest.tests
+  , Unit.EmitTypedExprTest.tests
   , Unit.ScaffoldTest.tests
   , Unit.ModuleSplitTest.tests
   , Unit.RegistryTest.tests

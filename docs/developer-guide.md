@@ -40,6 +40,7 @@ backend-specific vocabulary into the IR.
 │   ├── IR.hs                         -- Re-export façade for the IR
 │   ├── IR/Inventory.hs               -- Node / Role / CustomAttribute
 │   ├── IR/Selector.hs                -- Selector (And/Or/Not are Haskell-only)
+│   ├── IR/Expr.hs                    -- Typed expression sub-IR (issue #57): narrow alternative to ALRubyExpr
 │   ├── IR/Assertion.hs               -- Assertion / Mapping / PlanFile / Job / ExecutionPlan
 │   ├── Resolve.hs                    -- Inventory × Plan → ExecutionPlan
 │   ├── Layout.hs                     -- Layout (output paths) + path validation
@@ -146,6 +147,11 @@ Serverspec / InSpec / Ansible vocabulary must not appear here.
 - `SelAnd` / `SelOr` / `SelNot` are **constructed from Haskell only**
   (Dhall lacks recursive types). The CLI's `--only-*` chaining uses them
   internally; they have no Dhall surface.
+- `IR/Expr.hs` (`Expr`) is the typed sub-IR that escape-hatch patterns
+  (`ALRubyExpr`) graduate into when they recur often enough to deserve a
+  first-class constructor. Embedded inside `AttrLeaf` via `ALExpr`. Stays
+  flat (non-recursive) for the same Dhall-no-recursive-types reason as
+  `Selector`. Grow additively — see issue #57.
 
 ### 5.2 `PanInfraSpec.Dhall`
 

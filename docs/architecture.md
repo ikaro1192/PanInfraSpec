@@ -11,6 +11,14 @@ generator collects all assertions sharing a `(kind, primaryKey)` into one
 `exit-status = 0` and `exit-status = 1` for the same command), generation
 fails fast rather than emit Ruby that is guaranteed to fail at run time.
 
+The IR also carries a small typed expression sub-IR (`PanInfraSpec.IR.Expr`)
+that plugs into `AttrLeaf` via `ALExpr`. It promotes the most common
+escape-hatch patterns (per-host arithmetic such as memory %) into typed,
+backend-agnostic constructors so plans can avoid embedding raw Ruby strings;
+each backend emitter renders these into its own target language. The set is
+intentionally narrow and grows additively as recurring `ALRubyExpr` patterns
+are observed (see GitHub issue #57).
+
 The arrow above is drawn for Serverspec, but the IR and the emitter
 interface are backend-agnostic. Adding a new backend is a new Dhall
 prelude plus a new emitter module — no changes to existing inputs, the

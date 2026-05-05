@@ -41,3 +41,18 @@ To add a new resource, extend `dhall/Serverspec.dhall` with a smart
 constructor and a state type, then add one entry to `formatItLine` in
 `src/PanInfraSpec/Emit/Serverspec.hs` mapping each attribute key to its Ruby
 DSL line.
+
+## Per-host dynamic thresholds
+
+`MysqlConfigState`, `PhpConfigState`, and `X509CertificateState` each
+expose a `Compare` family for comparing an attribute against a value:
+
+| Constructor | Value type | Notes |
+|---|---|---|
+| `Compare`                | `Natural`   | Static threshold. |
+| `CompareExpr`            | `Text`      | Escape hatch — emitted as bare Ruby. See [`docs/plan.md`](./plan.md#escape-hatch-compareexpr--expand_attr). |
+| `CompareTypedExpr`       | `Spec.Expr` | Typed sub-IR; preferred when the pattern fits (see [`docs/plan.md`](./plan.md#typed-expression-path-preferred)). |
+
+`X509CertificateState` uses the same shape under the
+`ValidityInDaysCompare` / `ValidityInDaysCompareExpr` /
+`ValidityInDaysCompareTypedExpr` names.

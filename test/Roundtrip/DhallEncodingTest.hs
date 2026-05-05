@@ -16,13 +16,30 @@ attrValueU :: Text
 attrValueU =
   "< AVText : Text | AVNat : Natural | AVBool : Bool \
   \| AVSymbol : Text \
-  \| AVList : List < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text | ALRubyExpr : Text > \
-  \| AVRecord : List { mapKey : Text, mapValue : < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text | ALRubyExpr : Text > } \
-  \| AVCompare : { op : < Lt | Le | Gt | Ge | Eq | Match >, value : < ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text | ALRubyExpr : Text > } \
+  \| AVList : List " <> attrLeafU <> " \
+  \| AVRecord : List { mapKey : Text, mapValue : " <> attrLeafU <> " } \
+  \| AVCompare : { op : " <> compareOpU <> ", value : " <> attrLeafU <> " } \
   \>"
 
 attrLeafU :: Text
-attrLeafU = "< ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text | ALRegex : Text | ALRubyExpr : Text >"
+attrLeafU =
+  "< ALText : Text | ALNat : Natural | ALBool : Bool | ALSymbol : Text \
+  \| ALRegex : Text | ALRubyExpr : Text | ALExpr : " <> exprU <> " >"
+
+-- | Mirrors the Dhall @Operand@ union declared in @dhall/Serverspec.dhall@.
+operandU :: Text
+operandU = "< Lit : Natural | Fact : Text >"
+
+-- | Mirrors the Dhall @Expr@ union declared in @dhall/Serverspec.dhall@.
+-- Kept flat (non-recursive) because Dhall lacks recursive types.
+exprU :: Text
+exprU =
+  "< FactInt : Text \
+  \| FactIntScaled : { name : Text, muls : List Natural, divisor : Natural } \
+  \| Add : { left : " <> operandU <> ", right : " <> operandU <> " } \
+  \| Sub : { left : " <> operandU <> ", right : " <> operandU <> " } \
+  \| Mul : { left : " <> operandU <> ", right : " <> operandU <> " } \
+  \| Div : { left : " <> operandU <> ", right : " <> operandU <> " } >"
 
 compareOpU :: Text
 compareOpU = "< Lt | Le | Gt | Ge | Eq | Match >"
@@ -76,6 +93,65 @@ tests = testGroup "Dhall round-trip"
          \}")
         (AVCompare OpGt (ALRubyExpr "paninfraspec_x.to_i"))
       )
+  , testCase "Expr.FactInt"
+      (decodes
+        ("(" <> exprU <> ").FactInt \"php_max_mb\"")
+        (ExprFactInt "php_max_mb"))
+  , testCase "Expr.FactIntScaled"
+      (decodes
+        ("(" <> exprU <> ").FactIntScaled \
+         \{ name = \"total_ram_kb\", muls = [1024, 70], divisor = 100 }")
+        (ExprFactIntScaled "total_ram_kb" [1024, 70] 100))
+  , testCase "AttrLeaf.ALExpr"
+      (decodes
+        ("(" <> attrLeafU <> ").ALExpr ((" <> exprU <> ").FactInt \"php_max_mb\")")
+        (ALExpr (ExprFactInt "php_max_mb")))
+  , testCase "AttrValue.AVCompare with ALExpr"
+      (decodes
+        ("(" <> attrValueU <> ").AVCompare \
+         \{ op = (" <> compareOpU <> ").Gt \
+         \, value = (" <> attrLeafU <> ").ALExpr \
+         \    ((" <> exprU <> ").FactIntScaled \
+         \      { name = \"total_ram_kb\", muls = [1024, 70], divisor = 100 }) \
+         \}")
+        (AVCompare OpGt
+          (ALExpr (ExprFactIntScaled "total_ram_kb" [1024, 70] 100))))
+  , testCase "Operand.Lit"
+      (decodes
+        ("(" <> operandU <> ").Lit 42")
+        (OpLit 42))
+  , testCase "Operand.Fact"
+      (decodes
+        ("(" <> operandU <> ").Fact \"free_kb\"")
+        (OpFact "free_kb"))
+  , testCase "Expr.Add"
+      (decodes
+        ("(" <> exprU <> ").Add \
+         \{ left  = (" <> operandU <> ").Fact \"a\" \
+         \, right = (" <> operandU <> ").Fact \"b\" \
+         \}")
+        (ExprAdd (OpFact "a") (OpFact "b")))
+  , testCase "Expr.Sub"
+      (decodes
+        ("(" <> exprU <> ").Sub \
+         \{ left  = (" <> operandU <> ").Fact \"total\" \
+         \, right = (" <> operandU <> ").Fact \"free\" \
+         \}")
+        (ExprSub (OpFact "total") (OpFact "free")))
+  , testCase "Expr.Mul"
+      (decodes
+        ("(" <> exprU <> ").Mul \
+         \{ left  = (" <> operandU <> ").Lit  2 \
+         \, right = (" <> operandU <> ").Fact \"x\" \
+         \}")
+        (ExprMul (OpLit 2) (OpFact "x")))
+  , testCase "Expr.Div"
+      (decodes
+        ("(" <> exprU <> ").Div \
+         \{ left  = (" <> operandU <> ").Fact \"total\" \
+         \, right = (" <> operandU <> ").Lit  2 \
+         \}")
+        (ExprDiv (OpFact "total") (OpLit 2)))
   , testCase "CustomAttribute round-trip"
       (decodes
         "{ name = \"total_ram_kb\", command = \"awk '/MemTotal/' /proc/meminfo\" }"

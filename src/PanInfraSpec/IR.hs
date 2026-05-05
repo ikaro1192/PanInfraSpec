@@ -16,6 +16,8 @@ module PanInfraSpec.IR
   , CompareOp (..)
   , AttrLeaf (..)
   , AttrValue (..)
+  , Expr (..)
+  , Operand (..)
   , Assertion (..)
   , Selector (..)
   , Mapping (..)
@@ -36,6 +38,7 @@ import PanInfraSpec.IR.Inventory
   , nodeEncoder
   )
 import PanInfraSpec.IR.Selector  (Selector (..))
+import PanInfraSpec.IR.Expr      (Expr (..), Operand (..))
 import PanInfraSpec.IR.Assertion
   ( CompareOp (..)
   , AttrLeaf (..)
