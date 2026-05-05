@@ -4,6 +4,7 @@ module PanInfraSpec.Emit.Serverspec
     -- * Schema (exported for property testing)
   , AttrTag (..)
   , serverspecSchema
+  , serverspecAllowedKinds
   ) where
 
 import Control.Monad (foldM, forM_, unless, when)
@@ -199,6 +200,12 @@ serverspecSchema = Map.fromList
   , ("docker_image", Map.fromList
       [ ("exist", ATBool) ])
   ]
+
+-- | Allowed @aKind@ values for the Serverspec backend, derived from the
+-- 'serverspecSchema' keys. This is the Serverspec emitter's contribution to
+-- the cross-backend kind registry consumed by 'PanInfraSpec.Dhall.validate'.
+serverspecAllowedKinds :: [Text]
+serverspecAllowedKinds = Map.keys serverspecSchema
 
 -- | Kinds whose @describe@ block takes no primary-key argument
 -- (e.g. @describe selinux do ... end@). The Dhall smart constructor for these
@@ -1038,26 +1045,12 @@ emit scaffold layout ep
                          <> " collides with a generated spec file or another scaffold file")
         Nothing -> Right (Map.insert validated c acc)
 
--- | Registry entry for the Serverspec backend. The allowed-kinds list is the
--- layer-2 allowlist consulted by 'PanInfraSpec.Dhall.validate'; it is the
--- canonical set of @aKind@ values this emitter understands and must stay in
--- lockstep with the keys of 'serverspecSchema'.
+-- | Registry entry for the Serverspec backend. 'beAllowedKinds' is derived
+-- from 'serverspecSchema' so the layer-2 allowlist consulted by
+-- 'PanInfraSpec.Dhall.validate' cannot drift out of lockstep with the schema
+-- this emitter actually understands.
 serverspecBackend :: BackendEntry
 serverspecBackend = BackendEntry
   { beEmitter      = emit
-  , beAllowedKinds =
-      [ "service", "package", "port", "file", "command"
-      , "user", "group", "process", "mount", "interface", "kernel-module"
-      , "bond", "bridge", "default_gateway", "host"
-      , "ip6tables", "ipfilter", "ipnat", "iptables", "routing_table"
-      , "selinux", "selinux_module", "linux_audit_system"
-      , "linux_kernel_parameter", "cgroup"
-      , "windows_feature", "windows_registry_key"
-      , "x509_certificate", "cron"
-      , "lxc", "mail_alias", "ppa", "yumrepo"
-      , "iis_app_pool", "iis_website"
-      , "mysql_config", "php_config"
-      , "x509_private_key", "zfs"
-      , "docker_container", "docker_image"
-      ]
+  , beAllowedKinds = serverspecAllowedKinds
   }
